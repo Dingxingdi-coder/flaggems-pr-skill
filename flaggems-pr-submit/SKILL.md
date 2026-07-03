@@ -61,29 +61,42 @@ description:This skill should be used when submitting FlagGems **NVIDIA general*
 
 ## Workflow（模型只需调用 3 个命令）
 
-**脚本目录: `<SKILL_DIR>/scripts/`**
+### Phase 0：超参数以及环境变量检查
 
-### Phase 0: Name Lookup
+* 是否提供了容器名：你现在处于宿主机的终端环境中，所以用户给的初始提示词中必须包含容器名；在确定容器名之后，使用 `docker exec -it <container_name> bash` 进入容器环境，之后所有的命令都需要在容器中运行。
+* GPU 是否可用：使用 `nvidia-smi` 检查 GPU 是否可用
+* 算子名：用户至少需要提供一个要提交的算子，最多提供 GPU 数目个算子（因为每一个算子的 pr 过程至少需要使用一个 GPU）
+* `规范名.xlsx` 的路径：`scripts/operator_registry.py` 需要使用 `--norm-xlsx` 参数指定规范名.xlsx 的路径
+* 当前仓库是否包含 `origin` 和 `upstream` 两个远程仓库：使用 `git remote -v` 检查，输出应该类似：
+  ```
+  origin  https://github.com/<user.name>/FlagGems (fetch)
+  origin  https://github.com/<user.name>/FlagGems (push)
+  upstream        https://github.com/flagos-ai/FlagGems.git (fetch)
+  upstream        no_push (push)
+  ```
+
+### Phase 1: Name Lookup
+首先将用户提示词中提到的所有算子名映射成规范算子名。
+
+脚本 `scripts/operator_registry.py` 会直接输出规范算子名。请阅读脚本，理解其使用方法.
+
+如果存在一个算子没有找到规范算子名，停下来（而不是继续接下来的步骤），告诉用户未找到，请用户提供规范算子名。
+当得到所有算子的规范名，或者说用户决定不再提交未找到规范算子名的算子时，继续执行下面的步骤。
+
+### Phase 2: Preparation
+在得到所有算子的规范名之后，首先确认算子不存在上游：
+* `git fetch upstream master` 拉取上游仓库
+* `git show upstream/master:src/flag_gems/ops/<op>.py` 预期失败
+
+如果某个算子已经在上游了，停下来，告诉用户算子已存在，并且询问用户是否提交不存在的算子的 pr，不要直接继续执行下面的步骤。
+对于每一个要执行 pr 的算子，创建一个新的分支 `pr/<op>`：`git branch pr/<op> upstream/master`
+
+### Phase 3：Worktree Test
+
+在 `<workspace>/.worktrees/gen-<op>` 中跑通精度测试和 benchmark，确认代码本身能跑通再提取：
+
 ```bash
-cd /data/dxd/FlagGems_minimax_2_7_pr
-python <SKILL_DIR>/scripts/operator_registry.py lookup <op>
-```
-
-### Phase 1: Preparation
-```bash
-cd /data/dxd/FlagGems_minimax_2_7_pr
-git checkout -b pr/<op> origin/master
-```
-确认算子不存在于上游。Never cherry-pick or rebase。
-
-### Phase 1.5: Worktree Test & Speedup（阻塞项）
-
-**此步骤是 Phase 3 提交的前置条件。没有测试记录和加速比，不允许进入 Phase 3。**
-
-在 worktree 中跑通测试和 benchmark，确认代码本身能跑通再提取：
-
-```bash
-cd /data/dxd/FlagGems_minimax_2_7_pr/.worktrees/gen-<op>
+cd <workspace>/.worktrees/gen-<op>
 CUDA_VISIBLE_DEVICES=<N> python -m pytest tests/<test_file>.py -m <op> -vs
 CUDA_VISIBLE_DEVICES=<N> python -m pytest benchmark/<bench_file>.py -m <op> -s --level core
 ```
@@ -97,12 +110,11 @@ CUDA_VISIBLE_DEVICES=<N> python -m pytest benchmark/<bench_file>.py -m <op> -s -
 - benchmark 输出 0 cases 时，先检查 `core_shapes.yaml` 是否有对应条目，再检查 Benchmark 子类的 `set_shapes` 是否错误覆写
 - 非 pointwise 算子必须确认 benchmark wrapper 与 worktree 原版一致，不能为了跑通 benchmark 改写计算量
 
-### Phase 2: Extract Code（一步完成，禁止手动编写）
-```bash
-python <SKILL_DIR>/scripts/extract_from_worktree.py <op> \
-  --repo-dir /data/dxd/FlagGems_minimax_2_7_pr
-```
-脚本自动从 worktree 提取 6 个文件。所有注册按字母序插入，所有代码从 worktree 原样提取。
+### Phase 4: Extract Code
+利用 `scripts/extract_from_worktree.py` 从 `<workspace>/.worktrees/gen-<op>` 提取 6 个文件。
+
+阅读 `scripts/extract_from_worktree.py`，理解其使用方法。
+
 脚本完成后检查 operators.yaml 的 description 是否需要补充。
 
 ### Phase 2.5: PR 数据完整性检查（创建 PR 前阻塞项）
@@ -139,36 +151,6 @@ CUDA_VISIBLE_DEVICES=<N> python <SKILL_DIR>/scripts/submit_operator.py <op> \
 
 可选参数：
 - `--dry-run` — 只验证不提交（调试用，仍会运行测试和 benchmark）
-
-## check_operator.py 自动检查项一览
-
-| 检查 | 级别 |
-|------|------|
-| Kernel 文件存在 + KernelGen 首行 | error |
-| 无 print()、无重复函数 | error |
-| ops/__init__.py 注册 + 字母序 | error |
-| _FULL_CONFIG 注册（映射到 wrapper） | error |
-| Fallback 递归检测（kernel 中禁止 torch.<op>()） | error |
-| operators.yaml 完整性 + 唯一性 | error |
-| 测试 pytest mark + import 方式 + gems_assert | error |
-| gems_assert_close 无 rtol | error |
-| dtype 硬编码检查（需常量或加注释） | error |
-| 私有 API torch._xxx | error |
-| Benchmark pytest mark + op_name + dtype | error |
-| Git commit 无 Co-Authored-By | error |
-| Inplace mark 守卫 | error |
-| yaml/config 一致性交叉验证 | error |
-| Anti-hack Layer 1 (AST) + Layer 2 (dual execution) | error |
-| 单算子 PR（git diff 验证） | error |
-| @use_tl_extra 未使用桩函数 | error |
-| 硬编码超参无注释 | error |
-| 上游冲突检查 | error |
-| 多重载 yaml/benchmark/test 三方对齐 (check_overload_consistency) | error |
-| 测试函数命名规范 | warning |
-| logging 模块、torch import | warning |
-| 代码质量（行长、EOF、行尾空白） | warning |
-| 别名封装、NaN 处理、Worktree 一致性、Wrapper dtype assert | warning |
-| Benchmark case 数量 | info |
 
 ## 模型必须人工检查的规则（无法自动化）
 
