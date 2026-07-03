@@ -1,12 +1,14 @@
 # Final PR Spec
 
-Applies to: `agents/final-validate-pr.md`.
+Applies to: final-validation subagent.
+
+The final subagent works in `{GEN_WORKTREE}` on the generated branch. Do not create `pr/<op>`.
 
 ## Pre-submit validation
 
-Before commit and push, run formatting checks on only the target files. Then run PR-branch accuracy tests and `--level core` benchmark. Re-check the branch diff against the expected file set.
+Before commit and push, run formatting checks on only the target files. Then run gen-branch accuracy tests and `--level core` benchmark. Re-check the branch diff against the expected file set.
 
-The final validation agent must manually verify the checks formerly automated by helper scripts:
+The final validation subagent manually verifies:
 
 - kernel file exists and starts with KernelGen header;
 - no `print()` in kernel/test/benchmark;
@@ -23,17 +25,15 @@ The final validation agent must manually verify the checks formerly automated by
 
 Stage target files explicitly by path. Do not stage the whole repository.
 
-Commit message format:
-
-`[KernelGen][Nvidia] Add <op> operator with Triton kernel`
+Commit message format: `[KernelGen][Nvidia] Add <op> operator with Triton kernel`.
 
 The commit message must not contain co-author trailers.
 
-Push branch `pr/<op>` to the inferred or user-provided fork remote.
+Push the current generated branch, normally `gen-<op>`, to the inferred or user-provided fork remote.
 
 ## PR body
 
-Create the PR against the inferred or user-provided upstream repo and base branch. The PR body is English and includes:
+Create the PR from the generated branch against the inferred or user-provided upstream repo and base branch. The PR body is English and includes:
 
 - Summary or Description;
 - Testing / Correctness with commands;
