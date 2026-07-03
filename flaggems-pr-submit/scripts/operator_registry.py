@@ -1,22 +1,51 @@
 #!/usr/bin/env python3
-import argparse
+"""FlagGems operator norm-name lookup and PR-link backfill.
+
+Supported forms:
+    python operator_registry.py lookup <op> --norm-xlsx /data/dxd/规范名.xlsx
+    python operator_registry.py <op> --norm-xlsx /data/dxd/规范名.xlsx
+    python operator_registry.py backfill <op> <pr_url> [--norm-xlsx /data/dxd/规范名.xlsx]
+
+The lookup command prints only the norm name so it can be used by agents and shell scripts.
+"""
+
+from __future__ import annotations
+
 import os
 import sys
+from dataclasses import dataclass
+from typing import Iterable
 
 import openpyxl
 
+DEFAULT_NORM_XLSX = os.environ.get("FLAGGEMS_NORM_XLSX", "/data/dxd/规范名.xlsx")
 
-def clean(value):
+
+@dataclass(frozen=True)
+class Columns:
+    name: int
+    norm: int
+    path: int | None = None
+
+
+def clean(value) -> str:
     if value is None:
         return ""
     return str(value).replace("\r", "").replace("_x000d_", "").strip()
 
 
-def clean_op(name):
-    return clean(name).replace("aten::", "", 1)
+def clean_op(name) -> str:
+    text = clean(name)
+    return text.replace("aten::", "", 1).strip()
 
 
-def find_columns(ws):
+def load_workbook(path: str, *, read_only: bool):
+    if not os.path.isfile(path):
+        raise SystemExit(f"file not found: {path}")
+    return openpyxl.load_workbook(path, read_only=read_only, data_only=read_only)
+
+
+def find_columns(ws, *, require_path: bool = False) -> Columns:
     headers = [clean(cell.value) for cell in ws[1]]
 
     try:
@@ -25,49 +54,124 @@ def find_columns(ws):
         raise SystemExit("missing column: 算子名")
 
     norm_col = None
+    path_col = None
     for i, header in enumerate(headers, start=1):
         if header == "算子名（规范命名）" or "规范命名" in header:
             norm_col = i
-            break
+        if header == "代码路径" or "代码路径" in header:
+            path_col = i
 
     if norm_col is None:
         raise SystemExit("missing column: 算子名（规范命名）")
+    if require_path and path_col is None:
+        raise SystemExit("missing column: 代码路径")
 
-    return name_col, norm_col
+    return Columns(name=name_col, norm=norm_col, path=path_col)
 
 
-def lookup_norm_name(op_name, xlsx_path):
+def iter_operator_rows(ws, cols: Columns) -> Iterable[tuple[int, str, str]]:
+    for row in ws.iter_rows(min_row=2):
+        row_no = row[0].row
+        name = clean_op(row[cols.name - 1].value)
+        norm = clean(row[cols.norm - 1].value)
+        yield row_no, name, norm
+
+
+def lookup_norm_name(op_name: str, xlsx_path: str = DEFAULT_NORM_XLSX) -> str:
     op_name = clean_op(op_name)
-
     if not op_name:
         raise SystemExit("operator name is empty")
 
-    if not os.path.isfile(xlsx_path):
-        raise SystemExit(f"file not found: {xlsx_path}")
-
-    wb = openpyxl.load_workbook(xlsx_path, read_only=True, data_only=True)
+    wb = load_workbook(xlsx_path, read_only=True)
     ws = wb.active
+    cols = find_columns(ws)
 
-    name_col, norm_col = find_columns(ws)
-
-    for row in ws.iter_rows(min_row=2):
-        name = clean_op(row[name_col - 1].value)
+    for _, name, norm in iter_operator_rows(ws, cols):
         if name == op_name:
-            norm_name = clean(row[norm_col - 1].value)
-            if not norm_name:
+            if not norm:
                 raise SystemExit(f"empty norm name for operator: {op_name}")
-            return norm_name
+            return norm
 
     raise SystemExit(f"operator not found: {op_name}")
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Query FlagGems operator norm name")
-    parser.add_argument("operator", required=True, help="operator name, with or without aten:: prefix")
-    parser.add_argument("--norm-xlsx", required=True, help="path to 规范名.xlsx")
-    args = parser.parse_args()
+def backfill_pr_url(op_name: str, pr_url: str, xlsx_path: str = DEFAULT_NORM_XLSX) -> bool:
+    op_name = clean_op(op_name)
+    pr_url = clean(pr_url)
+    if not op_name:
+        raise SystemExit("operator name is empty")
+    if not pr_url or not pr_url.startswith("https://github.com/"):
+        raise SystemExit(f"invalid PR url: {pr_url}")
 
-    print(lookup_norm_name(args.operator, args.norm_xlsx))
+    wb = load_workbook(xlsx_path, read_only=False)
+    ws = wb.active
+    cols = find_columns(ws, require_path=True)
+    assert cols.path is not None
+
+    for row in ws.iter_rows(min_row=2):
+        row_no = row[0].row
+        name = clean_op(row[cols.name - 1].value)
+        norm = clean(row[cols.norm - 1].value)
+        if op_name in {name, norm}:
+            row[cols.path - 1].value = pr_url
+            wb.save(xlsx_path)
+            print(f"backfilled {op_name} -> {pr_url} (row {row_no})")
+            return True
+
+    raise SystemExit(f"operator not found for backfill: {op_name}")
+
+
+def _pop_option(argv: list[str], option: str, default: str) -> tuple[str, list[str]]:
+    argv = list(argv)
+    if option not in argv:
+        return default, argv
+    idx = argv.index(option)
+    try:
+        value = argv[idx + 1]
+    except IndexError:
+        raise SystemExit(f"{option} requires a value")
+    del argv[idx:idx + 2]
+    return value, argv
+
+
+def usage() -> str:
+    return (
+        "usage:\n"
+        "  operator_registry.py lookup <op> [--norm-xlsx PATH]\n"
+        "  operator_registry.py <op> [--norm-xlsx PATH]\n"
+        "  operator_registry.py backfill <op> <pr_url> [--norm-xlsx PATH]"
+    )
+
+
+def main(argv: list[str] | None = None) -> None:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if not argv or argv[0] in {"-h", "--help"}:
+        print(usage())
+        return
+
+    norm_xlsx, argv = _pop_option(argv, "--norm-xlsx", DEFAULT_NORM_XLSX)
+    if not argv:
+        raise SystemExit(usage())
+
+    command = argv[0]
+    if command == "lookup":
+        if len(argv) != 2:
+            raise SystemExit(usage())
+        print(lookup_norm_name(argv[1], norm_xlsx))
+        return
+
+    if command == "backfill":
+        if len(argv) != 3:
+            raise SystemExit(usage())
+        backfill_pr_url(argv[1], argv[2], norm_xlsx)
+        return
+
+    # Backward-compatible shorthand: first positional argument is the operator.
+    if len(argv) == 1:
+        print(lookup_norm_name(argv[0], norm_xlsx))
+        return
+
+    raise SystemExit(usage())
 
 
 if __name__ == "__main__":
