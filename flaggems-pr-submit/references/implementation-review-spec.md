@@ -1,10 +1,10 @@
 # Implementation Review Spec
 
-Applies to: `agents/implementation-review.md`.
+Applies to: implementation-review subagent.
 
-This agent reviews and repairs the generated worktree before anything is extracted to the PR branch. Generated code is not trusted.
+This subagent reviews and repairs only the target gen worktree. Generated code is not trusted. Do not inspect or modify other worktrees or the main repository checkout.
 
-## Files to inspect
+## Files to inspect inside `{GEN_WORKTREE}`
 
 - `src/flag_gems/ops/<module>.py`
 - target test file or file containing `pytest.mark.<op_id>`
@@ -42,4 +42,4 @@ The torch side and gems side must have equivalent arguments, computation, dtype 
 
 ## Repair rule
 
-Fix implementation, test, benchmark, yaml, and worktree registration problems in the worktree. Do not repair these by writing a different implementation directly on the PR branch.
+Fix implementation, test, benchmark, yaml, and worktree registration problems in `{GEN_WORKTREE}` only. Do not patch a different checkout.
