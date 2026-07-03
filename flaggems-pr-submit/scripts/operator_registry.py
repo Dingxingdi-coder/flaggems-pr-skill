@@ -1,12 +1,7 @@
 #!/usr/bin/env python3
 """FlagGems operator norm-name lookup and PR-link backfill.
 
-Supported forms:
-    python operator_registry.py lookup <op> --norm-xlsx /data/dxd/规范名.xlsx
-    python operator_registry.py <op> --norm-xlsx /data/dxd/规范名.xlsx
-    python operator_registry.py backfill <op> <pr_url> [--norm-xlsx /data/dxd/规范名.xlsx]
-
-The lookup command prints only the norm name so it can be used by agents and shell scripts.
+No local path is assumed. Provide --norm-xlsx, or set FLAGGEMS_NORM_XLSX.
 """
 
 from __future__ import annotations
@@ -17,8 +12,6 @@ from dataclasses import dataclass
 from typing import Iterable
 
 import openpyxl
-
-DEFAULT_NORM_XLSX = os.environ.get("FLAGGEMS_NORM_XLSX", "/data/dxd/规范名.xlsx")
 
 
 @dataclass(frozen=True)
@@ -39,15 +32,21 @@ def clean_op(name) -> str:
     return text.replace("aten::", "", 1).strip()
 
 
-def load_workbook(path: str, *, read_only: bool):
+def require_norm_xlsx(path: str | None) -> str:
+    path = path or os.environ.get("FLAGGEMS_NORM_XLSX")
+    if not path:
+        raise SystemExit("missing --norm-xlsx (or FLAGGEMS_NORM_XLSX)")
     if not os.path.isfile(path):
         raise SystemExit(f"file not found: {path}")
+    return path
+
+
+def load_workbook(path: str, *, read_only: bool):
     return openpyxl.load_workbook(path, read_only=read_only, data_only=read_only)
 
 
 def find_columns(ws, *, require_path: bool = False) -> Columns:
     headers = [clean(cell.value) for cell in ws[1]]
-
     try:
         name_col = headers.index("算子名") + 1
     except ValueError:
@@ -60,24 +59,20 @@ def find_columns(ws, *, require_path: bool = False) -> Columns:
             norm_col = i
         if header == "代码路径" or "代码路径" in header:
             path_col = i
-
     if norm_col is None:
         raise SystemExit("missing column: 算子名（规范命名）")
     if require_path and path_col is None:
         raise SystemExit("missing column: 代码路径")
-
     return Columns(name=name_col, norm=norm_col, path=path_col)
 
 
 def iter_operator_rows(ws, cols: Columns) -> Iterable[tuple[int, str, str]]:
     for row in ws.iter_rows(min_row=2):
-        row_no = row[0].row
-        name = clean_op(row[cols.name - 1].value)
-        norm = clean(row[cols.norm - 1].value)
-        yield row_no, name, norm
+        yield row[0].row, clean_op(row[cols.name - 1].value), clean(row[cols.norm - 1].value)
 
 
-def lookup_norm_name(op_name: str, xlsx_path: str = DEFAULT_NORM_XLSX) -> str:
+def lookup_norm_name(op_name: str, xlsx_path: str | None = None) -> str:
+    xlsx_path = require_norm_xlsx(xlsx_path)
     op_name = clean_op(op_name)
     if not op_name:
         raise SystemExit("operator name is empty")
@@ -85,17 +80,16 @@ def lookup_norm_name(op_name: str, xlsx_path: str = DEFAULT_NORM_XLSX) -> str:
     wb = load_workbook(xlsx_path, read_only=True)
     ws = wb.active
     cols = find_columns(ws)
-
     for _, name, norm in iter_operator_rows(ws, cols):
-        if name == op_name:
+        if name == op_name or norm == op_name:
             if not norm:
                 raise SystemExit(f"empty norm name for operator: {op_name}")
             return norm
-
     raise SystemExit(f"operator not found: {op_name}")
 
 
-def backfill_pr_url(op_name: str, pr_url: str, xlsx_path: str = DEFAULT_NORM_XLSX) -> bool:
+def backfill_pr_url(op_name: str, pr_url: str, xlsx_path: str | None = None) -> bool:
+    xlsx_path = require_norm_xlsx(xlsx_path)
     op_name = clean_op(op_name)
     pr_url = clean(pr_url)
     if not op_name:
@@ -117,14 +111,13 @@ def backfill_pr_url(op_name: str, pr_url: str, xlsx_path: str = DEFAULT_NORM_XLS
             wb.save(xlsx_path)
             print(f"backfilled {op_name} -> {pr_url} (row {row_no})")
             return True
-
     raise SystemExit(f"operator not found for backfill: {op_name}")
 
 
-def _pop_option(argv: list[str], option: str, default: str) -> tuple[str, list[str]]:
+def _pop_option(argv: list[str], option: str) -> tuple[str | None, list[str]]:
     argv = list(argv)
     if option not in argv:
-        return default, argv
+        return None, argv
     idx = argv.index(option)
     try:
         value = argv[idx + 1]
@@ -137,9 +130,10 @@ def _pop_option(argv: list[str], option: str, default: str) -> tuple[str, list[s
 def usage() -> str:
     return (
         "usage:\n"
-        "  operator_registry.py lookup <op> [--norm-xlsx PATH]\n"
-        "  operator_registry.py <op> [--norm-xlsx PATH]\n"
-        "  operator_registry.py backfill <op> <pr_url> [--norm-xlsx PATH]"
+        "  operator_registry.py lookup <op> --norm-xlsx PATH\n"
+        "  operator_registry.py <op> --norm-xlsx PATH\n"
+        "  operator_registry.py backfill <op> <pr_url> --norm-xlsx PATH\n"
+        "FLAGGEMS_NORM_XLSX may replace --norm-xlsx."
     )
 
 
@@ -149,7 +143,7 @@ def main(argv: list[str] | None = None) -> None:
         print(usage())
         return
 
-    norm_xlsx, argv = _pop_option(argv, "--norm-xlsx", DEFAULT_NORM_XLSX)
+    norm_xlsx, argv = _pop_option(argv, "--norm-xlsx")
     if not argv:
         raise SystemExit(usage())
 
@@ -159,18 +153,14 @@ def main(argv: list[str] | None = None) -> None:
             raise SystemExit(usage())
         print(lookup_norm_name(argv[1], norm_xlsx))
         return
-
     if command == "backfill":
         if len(argv) != 3:
             raise SystemExit(usage())
         backfill_pr_url(argv[1], argv[2], norm_xlsx)
         return
-
-    # Backward-compatible shorthand: first positional argument is the operator.
     if len(argv) == 1:
         print(lookup_norm_name(argv[0], norm_xlsx))
         return
-
     raise SystemExit(usage())
 
 
