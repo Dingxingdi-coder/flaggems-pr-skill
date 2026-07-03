@@ -2,6 +2,6 @@
 
 This repository contains the `flaggems-pr-submit` skill.
 
-The current design is context-driven. The skill does not assume local workspace paths, GPU IDs, remotes, fork repository, upstream repository, or tested-on strings. A main agent first creates a context JSON with `flaggems-pr-submit/scripts/context.py`, then delegates each phase to a small agent document under `flaggems-pr-submit/agents/`.
+The current design is context-driven. The main agent creates a context JSON with `flaggems-pr-submit/scripts/context.py`, then dispatches one operator agent per operator. Each operator agent runs the full initial PR pipeline through `flaggems-pr-submit/scripts/submit_operator.py`.
 
 Entry point: `flaggems-pr-submit/SKILL.md`.
