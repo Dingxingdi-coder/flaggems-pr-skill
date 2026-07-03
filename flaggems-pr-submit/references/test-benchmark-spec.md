@@ -1,26 +1,24 @@
 # Test and Benchmark Spec
 
-Applies to: `agents/worktree-test-benchmark.md` and the validation part of `agents/final-validate-pr.md`.
+Applies to: worktree-test-benchmark subagent and final-validation subagent.
+
+All commands run inside `{GEN_WORKTREE}` on the generated branch with the assigned GPU.
 
 ## Accuracy tests
 
-Run the worktree accuracy test before extraction and the PR-branch accuracy test after extraction. Use the assigned GPU.
+Locate the test file containing `pytest.mark.<op_id>`. Prefer `tests/test_<op_id>.py` if present.
 
-Worktree pattern: `CUDA_VISIBLE_DEVICES=<gpu> python -m pytest <test_file> -m <op_id> -vs`.
+Command pattern: `CUDA_VISIBLE_DEVICES=<gpu> python -m pytest <test_file> -m <op_id> -vs`.
 
-PR-branch pattern: `CUDA_VISIBLE_DEVICES=<gpu> python -m pytest tests/test_<op_id>.py -x -v --timeout=60`.
-
-Failures are blocking. Do not reduce coverage to make the test pass. Fix the worktree implementation or test logic and rerun.
+Failures are blocking. Do not reduce coverage to make the test pass. Fix implementation or test logic and rerun.
 
 ## Benchmark
 
-Run benchmark with `-s --level core` before extraction and after extraction.
+Locate the benchmark file containing `pytest.mark.<op_id>`. Prefer `benchmark/test_<op_id>.py` if present.
 
-Worktree pattern: `CUDA_VISIBLE_DEVICES=<gpu> python -m pytest <bench_file> -m <op_id> -s --level core`.
+Command pattern: `CUDA_VISIBLE_DEVICES=<gpu> python -m pytest <bench_file> -m <op_id> -s --level core`.
 
-PR-branch pattern: `CUDA_VISIBLE_DEVICES=<gpu> python -m pytest benchmark/test_<op_id>.py -s --level core`.
-
-Benchmark failures are blocking. Benchmark output must contain nonzero successful cases. Record case count, dtype grouping, arithmetic mean speedup, and TFLOPS if present.
+Benchmark failures are blocking. Output must contain nonzero successful cases. Record case count, dtype grouping, arithmetic mean speedup, and TFLOPS if present.
 
 ## Zero cases
 
