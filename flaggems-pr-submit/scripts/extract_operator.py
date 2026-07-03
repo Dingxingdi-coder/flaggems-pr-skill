@@ -9,8 +9,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import yaml
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 from op_naming import resolve_op  # noqa: E402
@@ -27,25 +25,48 @@ def load_context(path: str) -> dict:
     return json.loads(p.read_text())
 
 
-def stage_dict(stage_text: str) -> dict[str, str]:
+def stage_line(stage_text: str) -> str:
     parts = stage_text.split()
     if len(parts) != 2:
         fail(f"expected_stage must look like 'alpha 5.1', got {stage_text!r}")
-    return {parts[0]: parts[1]}
+    return f"      - {parts[0]}: '{parts[1]}'\n"
 
 
 def normalize_stage(repo: Path, op: str, expected_stage: str) -> None:
+    """Patch only the target operator's stages block and preserve yaml formatting."""
     yaml_path = repo / "conf" / "operators.yaml"
-    data = yaml.safe_load(yaml_path.read_text())
+    lines = yaml_path.read_text(encoding="utf-8").splitlines(keepends=True)
     target = resolve_op(op).op_id
+    expected = stage_line(expected_stage)
+    out: list[str] = []
+    i = 0
     changed = False
-    for entry in data.get("ops", []):
-        if entry.get("id") == target or str(entry.get("id", "")).startswith(f"{target}_"):
-            if entry.get("stages") != [stage_dict(expected_stage)]:
-                entry["stages"] = [stage_dict(expected_stage)]
+    in_target = False
+
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+        if line.startswith("  - id: "):
+            entry_id = stripped.split(":", 1)[1].strip()
+            in_target = entry_id == target or entry_id.startswith(f"{target}_")
+        if in_target and line.startswith("    stages:"):
+            out.append(line)
+            i += 1
+            old_block: list[str] = []
+            while i < len(lines) and lines[i].startswith("      - "):
+                old_block.append(lines[i])
+                i += 1
+            if old_block != [expected]:
+                out.append(expected)
                 changed = True
+            else:
+                out.extend(old_block)
+            continue
+        out.append(line)
+        i += 1
+
     if changed:
-        yaml_path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        yaml_path.write_text("".join(out), encoding="utf-8")
         print(f"normalized operators.yaml stage to {expected_stage}")
 
 
@@ -63,13 +84,7 @@ def main() -> None:
     if not Path(ctx["worktree_root"]).expanduser().is_dir():
         fail(f"worktree_root not found: {ctx['worktree_root']}")
 
-    cmd = [
-        sys.executable,
-        str(SCRIPT_DIR / "extract_from_worktree.py"),
-        args.op,
-        "--repo-dir",
-        str(repo),
-    ]
+    cmd = [sys.executable, str(SCRIPT_DIR / "extract_from_worktree.py"), args.op, "--repo-dir", str(repo)]
     if args.dry_run:
         cmd.append("--dry-run")
     res = subprocess.run(cmd, cwd=repo, text=True)
