@@ -1,142 +1,107 @@
 # FlagGems PR Review 常见问题
 
-来自历史 PR Review 的经验总结，提交前务必逐条排查。
+以下来自历史 PR review。提交前逐条排查；如与 `operator-quality.md` 冲突，以更严格的规则为准。
 
-## 1. 算子命名问题
+## 1. 算子命名
 
-### 命名转换规则
-- aten 算子需要进行名字转换（例如 `a.out` → `a_out`，`a.self_out` → `a_self_out`）
-- **前导下划线去除（mark 和 yaml id 中）**：`_foo` → `foo`
-  - 文件名、函数名、import、`_FULL_CONFIG` 的 aten name 保留下划线
-  - 只有 pytest mark 和 yaml `id` 去掉前导下划线
-  - 例如：`_cholesky_solve_helper` → yaml `id: cholesky_solve_helper`，mark `@pytest.mark.cholesky_solve_helper`
-- 尾部下划线保留：`b_` → `b_`（inplace 变体）
-- fused 算子以算子本身名称为 ID，不用参考实现的名称
-- **禁止随意 mark**
+- aten 名要转换为合法 snake_case：`a.out` → `a_out`，`a.self_out` → `a_self_out`。
+- 前导下划线只在 pytest mark、yaml `id`、test/benchmark 文件名中去掉：`_foo` → `foo`。
+- kernel 文件名、函数名、import、`__all__`、`_FULL_CONFIG` aten name、yaml `for` 保留前导下划线。
+- 尾部下划线表示 inplace，始终保留：`bernoulli_` → `bernoulli_`。
+- fused 算子以 fused 算子自身命名，不用内部 reference 名。
+- 禁止随意 mark；yaml `id` = pytest mark = benchmark `op_name`。
+- 提交前检查冲突：`grep -n "id: <op_id>" conf/operators.yaml`。
 
-### 命名冲突
-- 提交前必须检查是否与现有算子冲突
-- 运行：`grep "id: <op>" conf/operators.yaml`
+## 2. 测试文件
 
-## 2. 测试文件问题
+- 禁止 `print()`；需要跳过用 `@pytest.mark.skip(reason=...)`。
+- 测试函数名用 `test_<op_id>`，不要保留 `test_accuracy_` 前缀。
+- 使用 `from . import accuracy_utils as utils`。
+- Golden reference 用 `utils.to_reference()`，不要手写 `.cpu()` / `.to(torch.float64)`。
+- `gems_assert_close` 禁止传 `rtol`；NaN 用 `equal_nan=True`。
+- mark 必须与 yaml id 严格一致。例如 `special_erfcx` 不能写成 `@pytest.mark.erfcx`。
+- 测试 shapes 不要过重；若不能用公共 shape/dtype 常量，写注释说明。
+- 概率算子用统计验证，不做逐元素精确比较。
 
-### 禁止 print
-- 测试中 `print()` 会干扰正常数据采集
-- 跳过测例用 `@pytest.mark.skip(reason=…)`
+## 3. Benchmark
 
-### 运行时间
-- 注意测试运行时间，避免不必要的开销
-- 审视是否真的需要很重的 shapes 来执行精度测试
+- 必须使用 pytest + `benchmark/base.py` 封装；禁止自定义 benchmark 框架。
+- 一元 pointwise：`base.UnaryPointwiseBenchmark`。
+- 二元 pointwise：`base.BinaryPointwiseBenchmark`。
+- Reduction：`base.UnaryReductionBenchmark`。
+- 非 pointwise、自定义输入、backward、out/inplace、多输入结构复杂的算子：保留并修复 worktree 的 Benchmark 子类，确保 `--level core` 非 0 cases。
+- `base.GenericBenchmark(input_fn=...)` 只用于简单 shape 驱动输入；必须通过 `pytest benchmark/test_<op>.py -s --level core` 证明不被 shape 覆盖破坏。
+- dtype 默认用 `consts.FLOAT_DTYPES`；PyTorch/reference 不支持时可以硬编码有限 dtype，但必须注释并删除未使用的 `consts` import。
+- Benchmark 公平性：torch op 和 gems op 参数、计算量、forward/backward 边界一致，不能为了 speedup 改少 gems 侧工作。
+- benchmark 输出 0 cases 时，优先检查 `core_shapes.yaml`、pytest mark、Benchmark `set_shapes`。
 
-### mark 不匹配
-- 测例的 mark 必须与算子 ID 严格匹配
-- 错误示例：算子名 `special_erfcx` 但 mark 是 `@pytest.mark.erfcx`
+## 4. Kernel 代码质量
 
-## 3. Benchmark 问题
+- 使用 `logger.debug`，禁止 `print()`。
+- 删除重复函数、死代码、无意义 wrapper、未使用 import。
+- import 放文件顶部，不在函数中间 import。
+- 纯 Triton kernel 不需要 `import torch`；如果只用于类型注解或辅助分配，确保 flake8 不报 F401。
+- 核心计算不能使用 torch fallback；允许 torch 做输出分配、shape/dtype/device 查询和 reshape 等辅助工作。
+- `@use_tl_extra` 桩函数只有实际被 kernel 调用时保留。
+- libdevice 兼容性：若使用 `tl.extra.cuda.libdevice`，优先考虑 `tl_extra_shim`，避免 reviewer 要求跨后端兼容时返工。
+- 硬编码 BLOCK、shape 上限、dtype 列表必须有注释；可配置项优先外置。
 
-### 禁止自定义框架
-- **必须使用 pytest + base 封装类**
-- 不允许用自定义框架替代 pytest
+## 5. 文件与格式
 
-### 封装类选择
-| 算子类型 | 使用的类 |
-|---------|---------|
-| 一元 pointwise | `base.UnaryPointwiseBenchmark` |
-| 二元 pointwise | `base.BinaryPointwiseBenchmark` |
-| Reduction | `base.UnaryReductionBenchmark` |
-| Linalg/自定义 | 继承 `base.GenericBenchmark`，传入自定义 `input_fn` 参数 |
+- 维持项目命名约定和字母序，不随意重排已有列表。
+- 文件末尾必须有换行，行长度不超过项目限制。
+- 新增算子一般只改六类文件：kernel、两个注册文件、test、benchmark、operators.yaml。
+- 绝不使用 `git add -A` 或 `git add .`，只能逐文件 stage。
+- 不要修改上游已有测试函数；append mode 只在文件末尾追加目标算子相关代码。
 
-> **自定义扩展点**：
-> - `input_fn(shape, dtype, device)` — 生成输入 tensor（最常用，传给 GenericBenchmark 构造函数）
-> - `get_input_iter(dtype)` — 如需完全控制输入生成逻辑，继承后覆盖此方法
-> - `set_more_shapes()` — 如需自定义额外 shape 列表，覆盖此方法
+## 6. 上游结构差异
 
-### dtypes 不要硬编码
-- **必须使用 `consts.FLOAT_DTYPES`**，不要写 `[torch.float32]`
-- 参考已合入的 PR（如 #3278 atan2）
+当前上游结构与早期 worktree 可能不同，不能 cherry-pick：
 
-## 4. 代码质量问题
-
-### 无意义代码
-- 不提交无意义的代码片段
-- 不用无意义的冗余函数名
-- 不做无意义的封装
-
-### Import 规范
-- 禁止奇怪的 import（如 `from flag_gems.fused import fp8_einsum, fp8_einsum_ref`）
-- import 放在文件顶部，不在函数中间 import
-
-### 日志规范
-- 算子名使用 `logger.debug` 输出，不用 `print`
-
-### 重复函数
-- 检查是否有重复的函数定义（同名函数会互相覆盖）
-- 检查 kernel 函数名与导出函数名是否合理
-
-## 5. 文件与格式规范
-
-- 遵循项目命名约定，不乱起文件名
-- 维持已有列表的排列顺序（字母序），不随意打乱
-- 文件末尾必须有换行
-- 行长度不超过 120 字符
-
-## 6. 上游结构差异（重要）
-
-当前上游已大幅重构，**不能直接 cherry-pick**：
-
-| 项目 | 旧格式 | 上游当前格式 |
-|------|-------|------------|
-| 测试文件 | 共享文件追加 | 每算子独立文件 `tests/test_<op>.py` |
-| Benchmark | 共享文件追加 | 每算子独立文件 `benchmark/test_<op>.py` |
-| Benchmark API | 直接 pytest parametrize | `base.UnaryPointwiseBenchmark()` 等封装类 |
+| 项目 | 旧生成格式 | 上游当前要求 |
+|---|---|---|
+| 测试文件 | 共享文件追加 | 每算子独立文件，必要时 append mode |
+| Benchmark | 共享文件或自定义脚本 | pytest + `benchmark/base.py` 封装 |
 | operators.yaml | `name` 字段 | `id` 字段 |
+| 命名 | 随 generated 代码 | `op_naming.py` + `naming.md` |
 
 ## 7. pre-commit 常见问题
 
-| Hook | 常见问题 | 修复方法 |
-|------|---------|---------|
-| `end-of-file-fixer` | 文件末尾缺换行 | 自动修复，重新 stage |
-| `flake8` | `F401` 未使用的 import | 删掉多余 import（如 kernel 中不需要的 `import torch`） |
-| `flake8` | `F401` 未使用的 `consts` | benchmark 中不 import `consts` 除非真的用了 |
-| `isort` | import 顺序不对 | 自动修复，重新 stage |
-| `black` | 格式不对 | 自动修复，重新 stage |
-| `trailing-whitespace` | 行尾有空白 | 自动修复，重新 stage |
+| Hook | 常见问题 | 修复 |
+|---|---|---|
+| end-of-file-fixer | 文件末尾缺换行 | 自动修复后重新 stage |
+| trailing-whitespace | 行尾空白 | 自动修复后重新 stage |
+| isort | import 顺序 | 自动修复后重新 stage |
+| black | 格式 | 自动修复后重新 stage |
+| flake8 F401 | 未使用 import | 删除多余 import |
 
-## 8. 多重载算子 mark/op_name 未与 yaml 对齐
+## 8. 多重载对齐
 
-当一个 PR 提交多个算子重载（如 `reflection_pad3d` + `reflection_pad3d_out`，或 `eq` + `eq_scalar`），且 `operators.yaml` 中为每个重载注册了独立 `id` 时，benchmark 中**每个重载的测试函数必须使用与其 yaml id 一致的 mark 和 op_name**。
+当一个 PR 涉及多个 dispatch 变体（如 `_out`、`_scalar`、`_tensor`、`_mode`、`_backward`），如果 yaml 中拆成独立 `id`，每个变体都必须有一致的 mark 和 benchmark `op_name`。
 
-**错误示例**（yaml 拆了独立条目但 benchmark 未对齐）：
+错误：
+
 ```python
-# yaml 有 id: reflection_pad3d 和 id: reflection_pad3d_out
-# 但 benchmark 中 _out 变体写的是：
-@pytest.mark.reflection_pad3d          # ✗ 应为 reflection_pad3d_out
-def test_reflection_pad3d_out():
-    bench = ReflectionPad3dBenchmark(
-        op_name="reflection_pad3d",    # ✗ 应为 reflection_pad3d_out
-    )
+@pytest.mark.reflection_pad3d
+...
+op_name="reflection_pad3d"
 ```
 
-**正确做法**：
+用于 `reflection_pad3d_out` 变体时应改为：
+
 ```python
-@pytest.mark.reflection_pad3d_out      # ✓ 与 yaml id 一致
-def test_reflection_pad3d_out():
-    bench = ReflectionPad3dBenchmark(
-        op_name="reflection_pad3d_out", # ✓ 与 yaml id 一致
-    )
+@pytest.mark.reflection_pad3d_out
+...
+op_name="reflection_pad3d_out"
 ```
 
-**规则**：yaml `id` = pytest mark = benchmark `op_name`，三者必须完全一致。适用于所有重载形式（`_out`、`_scalar`、`_tensor`、`_mode` 等）。
+规则：yaml `id` = pytest mark = benchmark `op_name`。
 
-## 9. libdevice 兼容性
+## 9. PR 与 git
 
-- 部分算子使用了 `tl.extra.cuda.libdevice`（如 special_erfcx）
-- 上游要求跨后端兼容
-- 如果 reviewer 提出此问题，需改用 `tl_extra_shim`
-
-## 10. git 操作注意
-
-- **绝不用 `git add -A` 或 `git add .`**（仓库有 687 个 worktree 和大目录）
-- 必须逐文件 stage
-- 分支命名统一用 `pr/<operator>`
-- 每个分支基于 `upstream/master` 创建
+- 分支命名：`pr/<operator>`。
+- 每个分支基于 `upstream/master`。
+- commit message：`[KernelGen][Nvidia] Add <op> operator with Triton kernel`。
+- 禁止 `Co-Authored-By`，否则 CLA CI 可能失败。
+- 禁止 `git cherry-pick`、`git rebase`。
+- PR body 必须包含真实测试、benchmark、Multi-backend 数据；不能编造国产 GPU 结果。
