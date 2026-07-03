@@ -2,6 +2,6 @@
 
 This repository contains the `flaggems-pr-submit` skill.
 
-The current design is context-driven. The main agent creates a context JSON with `flaggems-pr-submit/scripts/context.py`, then dispatches one operator agent per operator. Each operator agent runs the full initial PR pipeline through `flaggems-pr-submit/scripts/submit_operator.py`.
+The current design is document-only. The main agent infers context from the user request and working repository, then dispatches specialist subagents per operator. Subagents run project commands directly and follow the agent/spec documents under `flaggems-pr-submit/`.
 
 Entry point: `flaggems-pr-submit/SKILL.md`.
