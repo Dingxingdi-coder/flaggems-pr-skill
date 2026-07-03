@@ -13,31 +13,21 @@ description: Orchestrate initial FlagGems operator PR creation directly from gen
 
 用户至少提供一个算子名。可以一次提交多个算子，但算子数不得超过可用 GPU slot 数。GPU 数从 `CUDA_VISIBLE_DEVICES` 或 `nvidia-smi` 推断；推断失败就询问用户。多算子时，每个算子分配一个不同 GPU。
 
-主代理自己完成环境和输入检查，不派专门子代理。默认值：
-
-- `repo_dir`：当前工作目录，必要时用 Git repo root 修正。
-- `worktree_root`：`<repo_dir>/.worktrees`。
-- `norm_xlsx`：用户提供值、`FLAGGEMS_NORM_XLSX` 或附近 `规范名.xlsx`。
-- `upstream_remote` / `fork_remote`：从 Git remotes 推断。
-- `upstream_repo` / `fork_repo`：从 remote URL 推断。
-- `base_branch`：优先 upstream master，其次 upstream main；仍不确定则询问。
-- `tested_on`：从 GPU 信息推断；失败时询问。
-
-推断失败或结果明显不对时，停止并向用户要具体值。
+主代理自己完成环境和输入检查，不派专门子代理。默认值：repo 根目录为当前 Git checkout，worktree_root 为 `<repo_dir>/.worktrees`，norm_xlsx 从用户输入、环境变量或附近 `规范名.xlsx` 推断，remote/repo/base branch/tested_on 从 Git 和 GPU 信息推断。推断失败或结果明显不对时，停止并向用户要具体值。
 
 ## 主代理调度
 
-主代理得到上下文后，对每个规范名算子启动一个 operator coordinator。每个 coordinator 的工作目录固定为该算子的 gen worktree。子代理不允许操作其他 worktree 或主仓库目录。
+主代理得到上下文后，对每个规范名算子启动一个 operator coordinator。每个 coordinator 的工作目录固定为该算子的 gen worktree。
 
-每个 coordinator 按顺序派遣：
+每个 coordinator 按顺序使用这些提示词模板派遣子代理：
 
-1. `agents/name-worktree.md`：规范名、命名、gen worktree、上游冲突。
-2. `agents/implementation-review.md`：gen worktree 内 kernel/test/benchmark/yaml 静态审查和修复。
-3. `agents/worktree-test-benchmark.md`：gen worktree 精度测试和 core benchmark。
-4. `agents/extract-register.md`：在 gen worktree 内整理目标六类文件和注册项。
-5. `agents/final-validation.md`：gen branch 最终验证、提交、push、创建 PR。
+1. `prompt-templates/name-worktree.md`
+2. `prompt-templates/implementation-review.md`
+3. `prompt-templates/worktree-test-benchmark.md`
+4. `prompt-templates/register.md`
+5. `prompt-templates/final-validation.md`
 
-主代理派遣时必须把对应模板中的 `{OP}`、`{RAW_OP}`、`{GEN_WORKTREE}`、`{OP_ID}`、`{MODULE}`、`{GPU}` 等占位符替换为真实值。
+主代理派遣时必须把模板中的 `{OP}`、`{RAW_OP}`、`{GEN_WORKTREE}`、`{OP_ID}`、`{MODULE}`、`{GPU}` 等占位符替换为真实值，再把替换后的完整提示词发送给子代理。子代理只在 `{GEN_WORKTREE}` 内工作，除上游只读检查外不访问其他目录。
 
 ## 规范文件
 
