@@ -10,7 +10,7 @@ Every hard-rule script must satisfy these interface rules:
 - prints failures as `ERROR[<RULE_ID>]: <message>`;
 - supports `--list-rules` and prints `<RULE_ID><tab><description>`;
 - keeps rule IDs stable after publication;
-- is referenced from the stage prompt template that must run it.
+- is referenced from the stage prompt template or maintenance document that must run it.
 
 ## Current hard-rule scripts
 
@@ -57,15 +57,32 @@ Rule IDs:
 | `STATIC-H008` | At least one changed benchmark file contains `pytest.mark.<op_id>`. |
 | `STATIC-H009` | At least one changed benchmark file sets `op_name` to the target `op_id`. |
 
+### `scripts/skill_meta_gate.py`
+
+Run during skill maintenance after adding, promoting, or editing hard/soft rules, and in the nightly reviewer-feedback intake workflow.
+
+```bash
+python "{SKILL_ROOT}/scripts/skill_meta_gate.py"
+```
+
+Rule IDs:
+
+| Rule ID | Constraint |
+|---|---|
+| `META-H001` | `references/hard-constraints.md` matches the rule IDs exposed by hard-rule scripts. |
+| `META-H002` | Stage prompt templates invoke the required hard-rule scripts and reviewer-learned rule files. |
+| `META-H003` | Reviewer-learned soft-rule entries follow the required schema. |
+| `META-H004` | `references/reviewer-feedback-intake.md` documents the collector metadata contract. |
+
 ## Adding or promoting a hard constraint
 
 Use this path only when the rule is deterministic from local files, git metadata, command output, or the normalized operator context.
 
-1. Pick the owning script. Naming/worktree/upstream-conflict checks belong in `resolve_op_context.py`; target diff, registration, test, benchmark, yaml, and PR-ready static checks belong in `operator_static_gate.py`. If neither script is a natural owner, add a new script with the same interface contract and wire it into the relevant prompt template.
+1. Pick the owning script. Naming/worktree/upstream-conflict checks belong in `resolve_op_context.py`; target diff, registration, test, benchmark, yaml, and PR-ready static checks belong in `operator_static_gate.py`; skill-maintenance consistency checks belong in `skill_meta_gate.py`. If none is a natural owner, add a new script with the same interface contract and wire it into the relevant prompt template or maintenance document.
 2. Assign a stable rule ID in the owning script and add it to that script's `RULES` list.
 3. Emit failures only through the script's rule-aware error helper so output includes `ERROR[<RULE_ID>]`.
 4. Update this document and, when ownership changes, `references/constraint-map.md`.
 5. If the rule was promoted from reviewer feedback, replace the soft-rule entry in `references/shared/reviewer-learned-rules.md` with a short pointer to the hard-rule ID.
-6. Run the script with `--list-rules` and run the normal stage command before committing the skill change.
+6. Run the edited script with `--list-rules`, run its normal stage command when applicable, and run `python "{SKILL_ROOT}/scripts/skill_meta_gate.py"` before committing the skill change.
 
 Do not duplicate a hard rule as prose instructions in multiple stage specs. Stage specs may mention what the script covers, but the executable script and this manifest are the source of truth.
