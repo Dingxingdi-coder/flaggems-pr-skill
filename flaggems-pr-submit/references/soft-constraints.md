@@ -4,7 +4,7 @@ Soft constraints are blocking review rules that require code understanding, revi
 
 ## Sources of soft constraints
 
-Soft rules live directly in the spec file that owns the scene. Do not maintain a central learned-rule ledger.
+Soft rules live directly in the canonical spec file that owns the scene. Do not maintain a central learned-rule ledger and do not create duplicate stage specs.
 
 ## Destination for reviewer-derived soft rules
 
@@ -12,8 +12,10 @@ Soft rules live directly in the spec file that owns the scene. Do not maintain a
 |---|---|
 | implementation semantics, torch fallback, wrapper behavior, dtype guard, generated dead code | `references/implementation-review/spec.md` |
 | accuracy-test semantics, benchmark fairness, shape coverage, zero cases, performance interpretation | `references/shared/test-benchmark.md` |
-| registration surface, yaml metadata, exported wrapper consistency | `references/registration/spec.md` |
-| final checks, staging, PR body, tested-on data, review-response behavior | `references/final/spec.md` |
+| registration surface, yaml metadata, exported wrapper consistency | `references/register/spec.md` |
+| final checks, staging, PR body, tested-on data, review-response behavior | `references/final-validation/spec.md` |
+
+Do not use deprecated registration/final alias specs or any separate learned-rule ledger.
 
 ## Embedded entry format
 
