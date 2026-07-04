@@ -13,11 +13,11 @@ description: Orchestrate initial FlagGems operator PR creation directly from gen
 
 本 skill 按规则类型维护，而不是把所有规则堆在提示词里：
 
-- 机械硬规则放在 `scripts/`，子代理必须运行脚本，不要手写等价检查；
-- 需要语义判断的规则放在 `references/<subagent>/` 和 `references/shared/`；
-- 从 reviewer 反馈沉淀的新软规则放在 `references/shared/reviewer-learned-rules.md`，稳定且可机械判定后再迁移到脚本。
+- 硬约束是脚本可判定的机械规则，放在 `scripts/`，并登记在 `references/hard-constraints.md`；子代理必须运行脚本，不要手写等价检查；
+- 软约束是需要主代理或子代理理解代码、reviewer 意图或性能语义后判断的规则，放在 `references/<subagent>/`、`references/shared/`，维护约定见 `references/soft-constraints.md`；
+- 从 reviewer 反馈沉淀的新规则先按 `references/reviewer-feedback-intake.md` 分流：可稳定脚本化的进入硬约束脚本，不可稳定脚本化的进入 `references/shared/reviewer-learned-rules.md`。
 
-维护规则边界见 `references/rule-structure.md`。
+维护规则边界见 `references/rule-structure.md`，当前责任表见 `references/constraint-map.md`。
 
 ## Workflow
 
