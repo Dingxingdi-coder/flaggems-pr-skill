@@ -69,6 +69,11 @@ RETIRED_REFERENCES = [
     "reviewer-learned-rules.md",
 ]
 
+RETIRED_PATHS = [
+    "references/registration/spec.md",
+    "references/final/spec.md",
+]
+
 SOFT_RULE_FILES = [
     "references/implementation-review/spec.md",
     "references/shared/test-benchmark.md",
@@ -168,6 +173,10 @@ def rel_to_repo(path: Path, root: Path) -> str:
 
 
 def check_canonical_destinations(root: Path, errors: list[Error]) -> None:
+    for rel in RETIRED_PATHS:
+        if (root / rel).exists():
+            errors.append(("META-H003", f"retired spec path still exists: {rel}"))
+
     for path in iter_policy_text_files(root):
         text = read_text(path)
         for retired in RETIRED_REFERENCES:
