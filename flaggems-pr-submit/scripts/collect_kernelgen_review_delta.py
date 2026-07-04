@@ -3,8 +3,8 @@
 
 The script uses GitHub CLI authentication. It stores a local JSON snapshot for
 incremental detection, but the public output intentionally contains only PR URLs
-and changed-comment URLs. A maintainer/agent should open the live PR pages and
-read the comments directly.
+and changed-comment URLs plus non-body metadata. A maintainer/agent should open
+the live PR pages and read the comments directly.
 """
 
 from __future__ import annotations
@@ -59,6 +59,7 @@ class CommentRecord:
     pr_number: int
     pr_title: str
     pr_url: str
+    pr_author: str
     kind: str
     comment_id: str
     author: str
@@ -74,6 +75,10 @@ class CommentRecord:
     def body_hash(self) -> str:
         return hashlib.sha256(self.body.encode("utf-8")).hexdigest()
 
+    @property
+    def is_pr_author(self) -> bool:
+        return bool(self.author and self.pr_author and self.author == self.pr_author)
+
     def state_payload(self) -> dict[str, Any]:
         return {
             "pr_number": self.pr_number,
@@ -85,6 +90,24 @@ class CommentRecord:
             "url": self.url,
             "body_hash": self.body_hash,
         }
+
+    def public_payload(self, change_type: str) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "url": self.url,
+            "change_type": change_type,
+            "kind": self.kind,
+            "author": self.author,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "is_pr_author": self.is_pr_author,
+        }
+        if self.path is not None:
+            payload["path"] = self.path
+        if self.line is not None:
+            payload["line"] = self.line
+        if self.state is not None:
+            payload["state"] = self.state
+        return payload
 
 
 def parse_ts(value: str | None) -> datetime | None:
@@ -191,6 +214,7 @@ def collect_comments_for_pr(repo: str, pr: PullRequest) -> list[CommentRecord]:
                 pr_number=pr.number,
                 pr_title=pr.title,
                 pr_url=pr.url,
+                pr_author=pr.author,
                 kind="issue_comment",
                 comment_id=comment_id,
                 author=user_login(item.get("user")),
@@ -212,6 +236,7 @@ def collect_comments_for_pr(repo: str, pr: PullRequest) -> list[CommentRecord]:
                 pr_number=pr.number,
                 pr_title=pr.title,
                 pr_url=pr.url,
+                pr_author=pr.author,
                 kind="review_comment",
                 comment_id=comment_id,
                 author=user_login(item.get("user")),
@@ -236,6 +261,7 @@ def collect_comments_for_pr(repo: str, pr: PullRequest) -> list[CommentRecord]:
                 pr_number=pr.number,
                 pr_title=pr.title,
                 pr_url=pr.url,
+                pr_author=pr.author,
                 kind="review",
                 comment_id=comment_id,
                 author=user_login(item.get("user")),
@@ -281,6 +307,20 @@ def record_change_type(record: CommentRecord, previous: dict[str, Any] | None, i
     return None
 
 
+def is_bot_author(author: str) -> bool:
+    return author.lower().endswith("[bot]")
+
+
+def should_keep_record(record: CommentRecord, *, ignored_authors: set[str], include_pr_author: bool, include_bots: bool) -> bool:
+    if record.author in ignored_authors:
+        return False
+    if not include_pr_author and record.is_pr_author:
+        return False
+    if not include_bots and is_bot_author(record.author):
+        return False
+    return True
+
+
 def group_changed_records(records: list[tuple[CommentRecord, str]]) -> list[dict[str, Any]]:
     grouped: dict[int, dict[str, Any]] = {}
     for record, change_type in records:
@@ -290,10 +330,12 @@ def group_changed_records(records: list[tuple[CommentRecord, str]]) -> list[dict
                 "pr_number": record.pr_number,
                 "pr_title": record.pr_title,
                 "pr_url": record.pr_url,
+                "pr_author": record.pr_author,
                 "first_changed_comment_url": record.url,
                 "first_changed_at": record.updated_at,
                 "changed_comment_count": 0,
                 "changed_comment_urls": [],
+                "changed_comments": [],
                 "change_types": [],
             },
         )
@@ -305,10 +347,15 @@ def group_changed_records(records: list[tuple[CommentRecord, str]]) -> list[dict
         group["changed_comment_count"] += 1
         if record.url not in group["changed_comment_urls"]:
             group["changed_comment_urls"].append(record.url)
+        group["changed_comments"].append(record.public_payload(change_type))
         if change_type not in group["change_types"]:
             group["change_types"].append(change_type)
 
     items = list(grouped.values())
+    for item in items:
+        item["changed_comments"].sort(
+            key=lambda comment: (parse_ts(comment.get("updated_at")) or datetime.max.replace(tzinfo=timezone.utc), comment.get("url") or "")
+        )
     items.sort(key=lambda item: (parse_ts(item["first_changed_at"]) or datetime.max.replace(tzinfo=timezone.utc), item["pr_number"]))
     return items
 
@@ -320,8 +367,11 @@ def render_index(
     since: datetime | None,
     baseline: bool,
     scanned_prs: int,
+    fetched_comments: int,
     scanned_comments: int,
+    ignored_comments: int,
     changed_records: list[tuple[CommentRecord, str]],
+    filters: dict[str, Any],
 ) -> str:
     items = [] if baseline else group_changed_records(changed_records)
     payload = {
@@ -329,8 +379,11 @@ def render_index(
         "run_at": run_at,
         "since": since.isoformat().replace("+00:00", "Z") if since else None,
         "baseline": baseline,
+        "filters": filters,
         "scanned_prs": scanned_prs,
+        "fetched_comment_count": fetched_comments,
         "scanned_comments": scanned_comments,
+        "ignored_comment_count": ignored_comments,
         "changed_pr_count": 0 if baseline else len(items),
         "changed_comment_count": 0 if baseline else sum(item["changed_comment_count"] for item in items),
         "items": items,
@@ -346,6 +399,8 @@ def main() -> None:
     parser.add_argument("--since", help="ISO-8601 timestamp override; otherwise state-file last_run_at is used")
     parser.add_argument("--lookback-hours", type=int, default=36, help="also inspect PRs updated this many hours before --since")
     parser.add_argument("--ignore-author", action="append", default=[], help="ignore comments from this GitHub login; repeatable")
+    parser.add_argument("--include-pr-author", action="store_true", help="include comments from the PR author; default is to skip them")
+    parser.add_argument("--include-bots", action="store_true", help="include comments from GitHub bot accounts; default is to skip them")
     parser.add_argument("--baseline", action="store_true", help="save the current snapshot without emitting changed-comment items")
     parser.add_argument("--new-only", action="store_true", help="emit only comments absent from the previous state; ignore edited existing comments")
     parser.add_argument("--max-body-chars", type=int, default=None, help=argparse.SUPPRESS)
@@ -359,30 +414,47 @@ def main() -> None:
 
     prs = [pr for pr in search_kernelgen_prs(args.repo) if is_recent_pr(pr, since, args.lookback_hours)]
 
-    all_records: list[CommentRecord] = []
+    fetched_comments = 0
+    kept_records: list[CommentRecord] = []
     changed_records: list[tuple[CommentRecord, str]] = []
     new_state_records = dict(previous_records)
     include_edits = not args.new_only
 
     for pr in prs:
         for record in collect_comments_for_pr(args.repo, pr):
-            if record.author in ignored_authors:
+            fetched_comments += 1
+            if not should_keep_record(
+                record,
+                ignored_authors=ignored_authors,
+                include_pr_author=args.include_pr_author,
+                include_bots=args.include_bots,
+            ):
                 continue
-            all_records.append(record)
+            kept_records.append(record)
             change_type = None if args.baseline else record_change_type(record, previous_records.get(record.key), include_edits)
             if change_type:
                 changed_records.append((record, change_type))
             new_state_records[record.key] = record.state_payload()
 
     run_at = utc_now_iso()
+    filters = {
+        "ignored_authors": sorted(ignored_authors),
+        "include_pr_author": bool(args.include_pr_author),
+        "include_bots": bool(args.include_bots),
+        "include_edits": include_edits,
+        "lookback_hours": args.lookback_hours,
+    }
     output = render_index(
         repo=args.repo,
         run_at=run_at,
         since=since,
         baseline=args.baseline,
         scanned_prs=len(prs),
-        scanned_comments=len(all_records),
+        fetched_comments=fetched_comments,
+        scanned_comments=len(kept_records),
+        ignored_comments=fetched_comments - len(kept_records),
         changed_records=changed_records,
+        filters=filters,
     )
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -394,7 +466,15 @@ def main() -> None:
         save_state(args.state_file, {"last_run_at": run_at, "records": new_state_records})
 
     print(
-        f"scanned_prs={len(prs)} scanned_comments={len(all_records)} changed_comments={0 if args.baseline else len(changed_records)}",
+        " ".join(
+            [
+                f"scanned_prs={len(prs)}",
+                f"fetched_comments={fetched_comments}",
+                f"scanned_comments={len(kept_records)}",
+                f"ignored_comments={fetched_comments - len(kept_records)}",
+                f"changed_comments={0 if args.baseline else len(changed_records)}",
+            ]
+        ),
         file=sys.stderr,
     )
 
