@@ -21,8 +21,15 @@ def run_git(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 def changed_files(base_ref: str) -> list[str]:
-    result = run_git("diff", "--name-only", base_ref)
-    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    diff_result = run_git("diff", "--name-only", base_ref)
+    untracked_result = run_git("ls-files", "--others", "--exclude-standard")
+    paths: list[str] = []
+    for result in (diff_result, untracked_result):
+        for line in result.stdout.splitlines():
+            path = line.strip()
+            if path and path not in paths:
+                paths.append(path)
+    return paths
 
 
 def read_text(path: Path) -> str:
