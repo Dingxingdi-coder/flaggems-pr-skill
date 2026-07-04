@@ -4,7 +4,7 @@ Applies to: final-validation subagent.
 
 The final subagent works in `{GEN_WORKTREE}` on the generated branch. Do not create `pr/<op>`.
 
-Read `references/rule-structure.md`, `references/shared/test-benchmark.md`, and `references/shared/reviewer-learned-rules.md` before running the final gate.
+Read `references/rule-structure.md`, `references/soft-constraints.md`, `references/shared/test-benchmark.md`, and this file's embedded final soft rules before running the final gate.
 
 ## Inputs
 
@@ -59,6 +59,10 @@ Create the PR from the generated branch against `{UPSTREAM_REPO}:{BASE_BRANCH}`.
 - Tested-on;
 - Multi-backend Testing, using real data or `N/A`;
 - Files Changed.
+
+## Embedded final soft rules
+
+No entries yet. Add future final, staging, PR-body, or review-response soft rules here using the SOFT-YYYYMMDD-short-slug format from `references/soft-constraints.md`.
 
 ## Return format
 
