@@ -19,9 +19,10 @@ description: This skill should be used when submitting FlagGems NVIDIA general o
 
 ```bash
 cd /data/dxd/FlagGems_minimax_2_7_pr
+export FLAGGEMS_NORM_XLSX=/data/dxd/规范名.xlsx
 python <SKILL_DIR>/scripts/prepare_operator.py <raw_op> \
   --repo-dir /data/dxd/FlagGems_minimax_2_7_pr \
-  --norm-xlsx /data/dxd/规范名.xlsx \
+  --norm-xlsx "$FLAGGEMS_NORM_XLSX" \
   --create-branch
 ```
 
@@ -65,6 +66,7 @@ cat <SKILL_DIR>/references/pr-checklist.md
 
 ```bash
 cd /data/dxd/FlagGems_minimax_2_7_pr
+export FLAGGEMS_NORM_XLSX=/data/dxd/规范名.xlsx
 CUDA_VISIBLE_DEVICES=<N> python <SKILL_DIR>/scripts/submit_operator.py <norm_op> \
   --repo-dir /data/dxd/FlagGems_minimax_2_7_pr \
   --gpu <N>
