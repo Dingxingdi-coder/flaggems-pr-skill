@@ -13,9 +13,9 @@ description: Orchestrate initial FlagGems operator PR creation directly from gen
 
 本 skill 按规则类型维护，而不是把所有规则堆在提示词里：
 
-- 硬约束是脚本可判定的机械规则，放在 `scripts/`，并登记在 `references/hard-constraints.md`；子代理必须运行脚本，不要手写等价检查；
-- 软约束是需要主代理或子代理理解代码、reviewer 意图或性能语义后判断的规则，放在 `references/<subagent>/`、`references/shared/`，维护约定见 `references/soft-constraints.md`；
-- 从 reviewer 反馈沉淀的新规则先按 `references/reviewer-feedback-intake.md` 分流：可稳定脚本化的进入硬约束脚本，不可稳定脚本化的进入 `references/shared/reviewer-learned-rules.md`。
+- 硬约束是脚本可判定的机械规则，直接以 `scripts/` 下的脚本为唯一来源；子代理必须运行脚本，不要手写等价检查；
+- 软约束是需要主代理或子代理理解代码、reviewer 意图或性能语义后判断的规则，直接维护在已有的 stage/shared spec 中；
+- 从 reviewer 反馈沉淀的新规则按 `references/reviewer-feedback-intake.md` 分流：可稳定脚本化的直接进入硬约束脚本，不可稳定脚本化的直接追加到负责该场景的已有 spec 文件。
 
 维护规则边界见 `references/rule-structure.md`，当前责任表见 `references/constraint-map.md`。
 
