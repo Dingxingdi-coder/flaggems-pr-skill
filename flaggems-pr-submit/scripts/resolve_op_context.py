@@ -14,11 +14,6 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-try:
-    from openpyxl import load_workbook
-except ImportError as exc:  # pragma: no cover - environment setup issue
-    raise SystemExit("openpyxl is required to read norm-name xlsx files") from exc
-
 
 @dataclass(frozen=True)
 class Rule:
@@ -67,6 +62,11 @@ def run_git(worktree: Path, *args: str, check: bool = True) -> subprocess.Comple
 
 
 def resolve_norm_name(raw_op: str, norm_xlsx: Path) -> str:
+    try:
+        from openpyxl import load_workbook
+    except ImportError as exc:  # pragma: no cover - environment setup issue
+        raise SystemExit("openpyxl is required to read norm-name xlsx files") from exc
+
     wb = load_workbook(norm_xlsx, read_only=True, data_only=True)
     ws = wb.active
     rows = ws.iter_rows(values_only=True)
