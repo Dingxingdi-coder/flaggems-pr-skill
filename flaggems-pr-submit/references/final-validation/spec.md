@@ -4,6 +4,8 @@ Applies to: final-validation subagent.
 
 The final subagent works in `{GEN_WORKTREE}` on the generated branch. Do not create `pr/<op>`.
 
+Read `references/rule-structure.md`, `references/shared/test-benchmark.md`, and `references/shared/reviewer-learned-rules.md` before running the final gate.
+
 ## Inputs
 
 - `{OP}`: normalized operator name.
@@ -14,28 +16,28 @@ The final subagent works in `{GEN_WORKTREE}` on the generated branch. Do not cre
 - `{FORK_REMOTE}`: remote used to publish the generated branch.
 - `{UPSTREAM_REPO}`: upstream GitHub repository, normally `flagos-ai/FlagGems`.
 - `{BASE_BRANCH}`: upstream base branch, normally `master`.
+- `{UPSTREAM_REF}`: fetched upstream ref produced by the resolver script.
 - `{TESTED_ON}`: real tested-on environment text.
-
-## Local specs to read
-
-Before PR creation, also follow `references/final-validation/test-benchmark.md` for the accuracy and benchmark rules used by this final gate.
 
 ## Pre-submit validation
 
-Before commit and push, run formatting checks on only the target files. Then run gen-branch accuracy tests and `--level core` benchmark. Re-check the branch diff against the expected file set.
+Before commit and push:
 
-The final validation subagent manually verifies:
+1. run `scripts/operator_static_gate.py` exactly as instructed by the prompt template;
+2. run formatting checks on only the target files;
+3. run the gen-branch accuracy test;
+4. run the gen-branch `--level core` benchmark;
+5. re-check that the staged file list is target-only.
 
-- kernel file exists and starts with KernelGen header;
-- no `print()` in kernel/test/benchmark;
-- wrapper registration exists in both registration files;
-- yaml entry is complete and unique;
-- yaml `id`, pytest mark, and benchmark `op_name` align;
+The final validation subagent manually verifies semantic blockers not covered by the static script:
+
 - no torch fallback for target computation;
-- no `gems_assert_close(..., rtol=...)`;
-- no unrelated operator files in diff;
 - exported functions have test and benchmark coverage;
-- benchmark has nonzero cases and real speedup data.
+- benchmark compares equivalent torch/gems work;
+- benchmark has nonzero cases and real speedup data;
+- PR body uses only real test, benchmark, and tested-on data.
+
+Do not create a PR if the static gate fails, performance data is missing, benchmark has zero cases, tests failed, or required PR body sections are incomplete.
 
 ## Git
 
@@ -57,8 +59,6 @@ Create the PR from the generated branch against `{UPSTREAM_REPO}:{BASE_BRANCH}`.
 - Tested-on;
 - Multi-backend Testing, using real data or `N/A`;
 - Files Changed.
-
-Do not create a PR if performance data is missing, benchmark has zero cases, tests failed, or required body sections are incomplete.
 
 ## Return format
 
