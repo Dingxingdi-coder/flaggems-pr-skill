@@ -28,10 +28,12 @@ Keep each entry short and concrete. A soft rule should tell the subagent what to
 ## Adding a new soft constraint from review feedback
 
 1. Confirm the feedback is new relative to the prior nightly snapshot.
-2. Identify the scene and the concrete fix that resolved or should resolve the comment.
-3. If the rule requires semantic judgment, append it to the appropriate section of `references/shared/reviewer-learned-rules.md` using the entry format above.
-4. If the rule is deterministic, do not add prose first; promote it directly to a hard-rule script and add a pointer entry only when useful for traceability.
-5. Check whether a stage spec needs a one-line pointer because the rule changes a subagent's responsibility boundary. Avoid copying the full rule into multiple files.
+2. Open the live PR/comment URL from the collector output and verify it is reviewer signal, not author explanation or CI noise.
+3. Identify the scene and the concrete fix that resolved or should resolve the comment.
+4. If the rule requires semantic judgment, append it to the appropriate section of `references/shared/reviewer-learned-rules.md` using the entry format above.
+5. If the rule is deterministic, do not add prose first; promote it directly to a hard-rule script and add a pointer entry only when useful for traceability.
+6. Check whether a stage spec needs a one-line pointer because the rule changes a subagent's responsibility boundary. Avoid copying the full rule into multiple files.
+7. Run `python "{SKILL_ROOT}/scripts/skill_meta_gate.py"` to validate the reviewer-learned rule schema and rule ownership links.
 
 ## Promotion criteria
 
