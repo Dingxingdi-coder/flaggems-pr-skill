@@ -10,4 +10,5 @@ Current design:
 - mechanical hard constraints live in `flaggems-pr-submit/scripts/`, expose stable rule IDs, and are indexed by `flaggems-pr-submit/references/hard-constraints.md`;
 - semantic soft constraints live in `flaggems-pr-submit/references/<subagent>/`, `flaggems-pr-submit/references/shared/`, and `flaggems-pr-submit/references/soft-constraints.md`;
 - reviewer-derived soft rules are maintained in `flaggems-pr-submit/references/shared/reviewer-learned-rules.md` and promoted to scripts only when they become deterministic;
-- nightly reviewer-feedback intake is documented in `flaggems-pr-submit/references/reviewer-feedback-intake.md` and supported by `flaggems-pr-submit/scripts/collect_kernelgen_review_delta.py`.
+- nightly reviewer-feedback intake is documented in `flaggems-pr-submit/references/reviewer-feedback-intake.md` and supported by `flaggems-pr-submit/scripts/collect_kernelgen_review_delta.py`;
+- skill-maintenance consistency is checked by `flaggems-pr-submit/scripts/skill_meta_gate.py` so hard-rule scripts, manifests, prompt templates, and reviewer-learned rule entries do not drift.
