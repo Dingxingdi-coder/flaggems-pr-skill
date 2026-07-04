@@ -1,0 +1,54 @@
+name: KernelGen reviewer feedback intake
+
+on:
+  schedule:
+    # 23:00 Asia/Tokyo. GitHub Actions cron uses UTC.
+    - cron: "0 14 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out skill repository
+        uses: actions/checkout@v4
+
+      - name: Restore collector state
+        uses: actions/cache@v4
+        with:
+          path: .cache/kernelgen-review-state.json
+          key: kernelgen-review-state-${{ github.run_id }}
+          restore-keys: |
+            kernelgen-review-state-
+
+      - name: Collect KernelGen reviewer-feedback delta
+        run: |
+          mkdir -p .cache
+          if [ ! -f .cache/kernelgen-review-state.json ]; then
+            python flaggems-pr-submit/scripts/collect_kernelgen_review_delta.py \
+              --repo flagos-ai/FlagGems \
+              --state-file .cache/kernelgen-review-state.json \
+              --output .cache/kernelgen-review-index.json \
+              --baseline
+          else
+            python flaggems-pr-submit/scripts/collect_kernelgen_review_delta.py \
+              --repo flagos-ai/FlagGems \
+              --state-file .cache/kernelgen-review-state.json \
+              --output .cache/kernelgen-review-index.json
+          fi
+
+      - name: Validate skill metadata
+        run: python flaggems-pr-submit/scripts/skill_meta_gate.py
+
+      - name: Upload reviewer-feedback intake index
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernelgen-review-index
+          path: .cache/kernelgen-review-index.json
+          if-no-files-found: error
