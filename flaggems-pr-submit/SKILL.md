@@ -17,7 +17,7 @@ description: Orchestrate initial FlagGems operator PR creation directly from gen
 * 使用 `nvidia-smi` 检查 GPU 状态和数量，推断 tested_on
 * 用户至少提供一个算子名。可以一次提交多个算子，但算子数不得超过可用 GPU slot 数。多算子时，每个算子分配一个不同 GPU。用户提供的都是原始算子名，即 `<raw_op>`
 * `<repo_root>`为当前工作目录，`<worktree_root>` 为 `<repo_root>/.worktrees/`
-* 使用 `gti remote -v` 查看远程仓库地址，理想状况应该类似：
+* 使用 `git remote -v` 查看远程仓库地址，理想状况应该类似：
     ```
     origin  https://github.com/<username>/FlagGems (fetch)
     origin  https://github.com/<username>/FlagGems (push)
@@ -39,7 +39,13 @@ description: Orchestrate initial FlagGems operator PR creation directly from gen
 4. `references/prompt-templates/register.md`
 5. `references/prompt-templates/final-validation.md`
 
-主代理派遣时必须把模板中的 `{OP}`、`{RAW_OP}`、`{GEN_WORKTREE}`、`{OP_ID}`、`{MODULE}`、`{GPU}` 等占位符替换为真实值，再把替换后的完整提示词发送给子代理。子代理只在 `{GEN_WORKTREE}` 内工作，除上游只读检查外不访问其他目录。
+主代理派遣时必须替换模板中出现的所有 `{...}` 占位符：
+
+* `name-worktree` 使用 `{raw_op}`、`{worktree_root}`、`{norm_xlsx}`、`{upstream}`、`{base_branch}`，产出后续子代理需要的 `{OP}`、`{OP_ID}`、`{MODULE}`、`{GEN_WORKTREE}`。
+* 后续子代理使用 `{OP}`、`{GEN_WORKTREE}`、`{OP_ID}`、`{MODULE}`、`{GPU}` 以及 final 阶段需要的 `{FORK_REMOTE}`、`{UPSTREAM_REPO}`、`{BASE_BRANCH}`、`{TESTED_ON}`。
+* 每个模板只描述子代理边界和应读取的专属规范目录；具体规则以 `references/<subagent>/` 下的文件为准。
+
+子代理只在 `{GEN_WORKTREE}` 内做仓库操作；允许只读访问本 skill 的 reference 文件；除上游只读检查外不访问其他目录。
 
 ## 失败策略
 
