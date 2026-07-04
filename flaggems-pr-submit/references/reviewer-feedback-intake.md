@@ -80,6 +80,8 @@ Also check that all relevant prompt templates already force subagents to read th
 
 The repository may run `.github/workflows/kernelgen-review-intake.yml` every day at 14:00 UTC, which is 23:00 Asia/Tokyo. The workflow restores `.cache/kernelgen-review-state.json`, runs the collector, runs `skill_meta_gate.py`, and uploads `.cache/kernelgen-review-index.json` as an artifact for the maintenance agent.
 
+GitHub scheduled workflows run only when the workflow file exists on the repository default branch. While this workflow exists only on a development branch, use the command above from a maintenance checkout; after promotion to the production/default branch, the nightly schedule becomes active.
+
 The workflow only collects and validates intake data. It does not modify the skill automatically; a networked maintenance agent should consume the artifact, open the referenced PR comments, classify the rule, update the skill, and run the meta gate before committing.
 
 ## Commit convention
