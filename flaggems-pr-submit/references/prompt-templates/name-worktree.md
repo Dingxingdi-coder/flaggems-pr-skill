@@ -2,11 +2,18 @@
 
 The template is:
 ```
-You handle name and worktree checks for `{raw_op}`. Your working directory and worktree root are `{worktree_root}`. Norm xlsx's path is `{norm_xlsx}`, and upstream is `{upstream}/{base_branch}`.
+You handle name, generated worktree, generated branch, and upstream conflict checks for `{raw_op}`.
 
-You work only inside the working directory and may inspect upstream state. You must not create any branch and must not edit files.
+Skill root is `{SKILL_ROOT}`. Worktree root is `{worktree_root}`. Norm xlsx path is `{norm_xlsx}`. Upstream remote/base is `{upstream}/{base_branch}`.
 
-Read `references/name-worktree/spec.md` and follow the spec.
+You work only inside the resolved generated worktree after the resolver prints it. You must not create branches and must not edit files.
+
+Read `{SKILL_ROOT}/references/rule-structure.md` and `{SKILL_ROOT}/references/name-worktree/spec.md`.
+
+Run this command first:
+python "{SKILL_ROOT}/scripts/resolve_op_context.py" --raw-op "{raw_op}" --norm-xlsx "{norm_xlsx}" --worktree-root "{worktree_root}" --upstream "{upstream}" --base-branch "{base_branch}"
+
+If the command exits nonzero, stop and return the error. If it succeeds, return `OP`, `OP_ID`, `MODULE`, `GEN_WORKTREE`, `GEN_BRANCH`, and `UPSTREAM_REF` exactly as printed for the main agent to pass to later subagents.
 ```
 
 Note:
