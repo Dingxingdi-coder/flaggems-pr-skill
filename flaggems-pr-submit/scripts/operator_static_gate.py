@@ -2,8 +2,9 @@
 """Deterministic static gate for one generated FlagGems operator PR.
 
 Hard constraints in this file are intentionally identified by stable rule IDs.
-When promoting a reviewer-learned rule into this script, add the rule to RULES,
-emit failures through add_error(...), and update references/hard-constraints.md.
+When promoting a reviewer-derived rule into this script, add the rule to RULES,
+emit failures through add_error(...), and validate this script with
+``--list-rules``.
 """
 
 from __future__ import annotations
