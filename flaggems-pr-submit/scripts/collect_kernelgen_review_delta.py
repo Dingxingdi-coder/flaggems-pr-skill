@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Collect new or edited reviewer comments on KernelGen Nvidia PRs.
+"""Collect a lightweight index of changed comments on KernelGen Nvidia PRs.
 
-The script uses GitHub CLI authentication. It stores a local JSON snapshot and
-emits a Markdown delta that can be handed to a maintainer/agent for rule
-extraction and hard-vs-soft classification.
+The script uses GitHub CLI authentication. It stores a local JSON snapshot for
+incremental detection, but the public output intentionally contains only PR URLs
+and changed-comment URLs. A maintainer/agent should open the live PR pages and
+read the comments directly.
 """
 
 from __future__ import annotations
@@ -270,74 +271,84 @@ def is_recent_pr(pr: PullRequest, since: datetime | None, lookback_hours: int) -
     return updated_at >= since - timedelta(hours=lookback_hours)
 
 
-def record_changed(record: CommentRecord, previous: dict[str, Any] | None) -> bool:
+def record_change_type(record: CommentRecord, previous: dict[str, Any] | None, include_edits: bool) -> str | None:
     if previous is None:
-        return True
-    return previous.get("body_hash") != record.body_hash or previous.get("updated_at") != record.updated_at
+        return "new"
+    if not include_edits:
+        return None
+    if previous.get("body_hash") != record.body_hash or previous.get("updated_at") != record.updated_at:
+        return "edited"
+    return None
 
 
-def markdown_quote(text: str, max_chars: int) -> str:
-    compact = "\n".join(line.rstrip() for line in text.strip().splitlines())
-    if len(compact) > max_chars:
-        compact = compact[: max_chars - 3].rstrip() + "..."
-    return "\n".join("> " + line if line else ">" for line in compact.splitlines())
-
-
-def render_delta(records: list[CommentRecord], run_at: str, since: datetime | None, baseline: bool, max_body_chars: int) -> str:
-    lines = [
-        "# KernelGen Nvidia PR review delta",
-        "",
-        f"- Run at: {run_at}",
-        f"- Since: {since.isoformat().replace('+00:00', 'Z') if since else 'no prior state'}",
-        f"- New or edited comments: {0 if baseline else len(records)}",
-        "",
-    ]
-    if baseline:
-        lines.append("Baseline mode: snapshot updated; no comments emitted for rule extraction.")
-        lines.append("")
-        return "\n".join(lines)
-    if not records:
-        lines.append("No new or edited reviewer comments were found.")
-        lines.append("")
-        return "\n".join(lines)
-
-    for record in records:
-        location = f" `{record.path}:{record.line}`" if record.path else ""
-        state = f" state={record.state}" if record.state else ""
-        lines.extend(
-            [
-                f"## PR #{record.pr_number}: {record.pr_title}",
-                "",
-                f"- Comment: {record.url}",
-                f"- Kind: {record.kind}{state}{location}",
-                f"- Author: {record.author}",
-                f"- Updated at: {record.updated_at}",
-                "",
-                markdown_quote(record.body, max_body_chars),
-                "",
-                "Triage fields for the maintainer/agent:",
-                "",
-                "- Scene:",
-                "- Concrete fix:",
-                "- Constraint class: hard | soft",
-                "- Update target: script/rule id or reviewer-learned-rules section",
-                "- Promotion note:",
-                "",
-            ]
+def group_changed_records(records: list[tuple[CommentRecord, str]]) -> list[dict[str, Any]]:
+    grouped: dict[int, dict[str, Any]] = {}
+    for record, change_type in records:
+        group = grouped.setdefault(
+            record.pr_number,
+            {
+                "pr_number": record.pr_number,
+                "pr_title": record.pr_title,
+                "pr_url": record.pr_url,
+                "first_changed_comment_url": record.url,
+                "first_changed_at": record.updated_at,
+                "changed_comment_count": 0,
+                "changed_comment_urls": [],
+                "change_types": [],
+            },
         )
-    return "\n".join(lines)
+        current_first = parse_ts(group["first_changed_at"])
+        record_updated = parse_ts(record.updated_at)
+        if current_first is None or (record_updated is not None and record_updated < current_first):
+            group["first_changed_comment_url"] = record.url
+            group["first_changed_at"] = record.updated_at
+        group["changed_comment_count"] += 1
+        if record.url not in group["changed_comment_urls"]:
+            group["changed_comment_urls"].append(record.url)
+        if change_type not in group["change_types"]:
+            group["change_types"].append(change_type)
+
+    items = list(grouped.values())
+    items.sort(key=lambda item: (parse_ts(item["first_changed_at"]) or datetime.max.replace(tzinfo=timezone.utc), item["pr_number"]))
+    return items
+
+
+def render_index(
+    *,
+    repo: str,
+    run_at: str,
+    since: datetime | None,
+    baseline: bool,
+    scanned_prs: int,
+    scanned_comments: int,
+    changed_records: list[tuple[CommentRecord, str]],
+) -> str:
+    items = [] if baseline else group_changed_records(changed_records)
+    payload = {
+        "repo": repo,
+        "run_at": run_at,
+        "since": since.isoformat().replace("+00:00", "Z") if since else None,
+        "baseline": baseline,
+        "scanned_prs": scanned_prs,
+        "scanned_comments": scanned_comments,
+        "changed_pr_count": 0 if baseline else len(items),
+        "changed_comment_count": 0 if baseline else sum(item["changed_comment_count"] for item in items),
+        "items": items,
+    }
+    return json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=DEFAULT_REPO)
     parser.add_argument("--state-file", default=".kernelgen-review-state.json", type=Path)
-    parser.add_argument("--output", type=Path, help="write Markdown delta to this path; stdout is used when omitted")
+    parser.add_argument("--output", type=Path, help="write JSON index to this path; stdout is used when omitted")
     parser.add_argument("--since", help="ISO-8601 timestamp override; otherwise state-file last_run_at is used")
     parser.add_argument("--lookback-hours", type=int, default=36, help="also inspect PRs updated this many hours before --since")
     parser.add_argument("--ignore-author", action="append", default=[], help="ignore comments from this GitHub login; repeatable")
-    parser.add_argument("--baseline", action="store_true", help="save the current snapshot without emitting comments")
-    parser.add_argument("--max-body-chars", type=int, default=1200)
+    parser.add_argument("--baseline", action="store_true", help="save the current snapshot without emitting changed-comment items")
+    parser.add_argument("--new-only", action="store_true", help="emit only comments absent from the previous state; ignore edited existing comments")
+    parser.add_argument("--max-body-chars", type=int, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--no-write-state", action="store_true")
     args = parser.parse_args()
 
@@ -349,30 +360,41 @@ def main() -> None:
     prs = [pr for pr in search_kernelgen_prs(args.repo) if is_recent_pr(pr, since, args.lookback_hours)]
 
     all_records: list[CommentRecord] = []
-    changed_records: list[CommentRecord] = []
+    changed_records: list[tuple[CommentRecord, str]] = []
     new_state_records = dict(previous_records)
+    include_edits = not args.new_only
+
     for pr in prs:
         for record in collect_comments_for_pr(args.repo, pr):
             if record.author in ignored_authors:
                 continue
             all_records.append(record)
-            if not args.baseline and record_changed(record, previous_records.get(record.key)):
-                changed_records.append(record)
+            change_type = None if args.baseline else record_change_type(record, previous_records.get(record.key), include_edits)
+            if change_type:
+                changed_records.append((record, change_type))
             new_state_records[record.key] = record.state_payload()
 
     run_at = utc_now_iso()
-    markdown = render_delta(changed_records, run_at, since, args.baseline, args.max_body_chars)
+    output = render_index(
+        repo=args.repo,
+        run_at=run_at,
+        since=since,
+        baseline=args.baseline,
+        scanned_prs=len(prs),
+        scanned_comments=len(all_records),
+        changed_records=changed_records,
+    )
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(markdown, encoding="utf-8")
+        args.output.write_text(output, encoding="utf-8")
     else:
-        print(markdown)
+        print(output, end="")
 
     if not args.no_write_state:
         save_state(args.state_file, {"last_run_at": run_at, "records": new_state_records})
 
     print(
-        f"scanned_prs={len(prs)} scanned_comments={len(all_records)} delta_comments={0 if args.baseline else len(changed_records)}",
+        f"scanned_prs={len(prs)} scanned_comments={len(all_records)} changed_comments={0 if args.baseline else len(changed_records)}",
         file=sys.stderr,
     )
 
