@@ -1,5 +1,15 @@
 # Implementation Review Template
 
-Fields: `{OP}`, `{GEN_WORKTREE}`, `{OP_ID}`, `{MODULE}`, `{GPU}`.
+The template is:
+```
+You review and repair the generated implementation for `{OP}`. Your working directory is `{GEN_WORKTREE}`. Use op_id `{OP_ID}`, module `{MODULE}`, and GPU `{GPU}`.
 
-Prompt to send: You review and repair the generated implementation for `{OP}`. Read `references/implementation-review-spec.md`. Work directory is `{GEN_WORKTREE}`. All file reads and edits must stay inside this directory. Use op_id `{OP_ID}`, module `{MODULE}`, GPU `{GPU}`. Inspect kernel, tests, benchmark, yaml, and registration files. Fix violations in the gen worktree. Return changed files, fixed issues, remaining risks, and whether tests may run.
+For repository operations, work only inside `{GEN_WORKTREE}`. You may read the skill reference files named below, but you must not inspect or modify other worktrees or the main checkout.
+
+Read `references/implementation-review/spec.md` and follow the spec.
+
+Return changed files, fixed issues, remaining risks, and whether tests may run.
+```
+
+Note:
+* `{...}` are placeholders to be replaced by real values.
