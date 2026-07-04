@@ -37,6 +37,7 @@ A hard-rule script prints failures as `ERROR[<RULE_ID>]: <message>` and supports
 
 - `scripts/resolve_op_context.py`: norm-name lookup, special-op mapping, generated worktree resolution, branch check, upstream fetch, upstream kernel/yaml conflict check.
 - `scripts/operator_static_gate.py`: target file-set boundary, KernelGen header, `print()` ban, yaml-id uniqueness, pytest mark alignment, benchmark `op_name` alignment, and `gems_assert_close(..., rtol=...)` ban.
+- `scripts/skill_meta_gate.py`: skill-maintenance consistency across hard-rule scripts, rule manifests, prompt templates, reviewer-learned soft-rule schema, and reviewer-feedback intake documentation.
 
 ### Soft constraints
 
@@ -49,6 +50,8 @@ Soft-rule maintenance conventions are in `references/soft-constraints.md`.
 ### Reviewer-learned intake
 
 Rules learned from `[KernelGen][Nvidia]` PR reviews are collected through `references/reviewer-feedback-intake.md`. Add semantic rules to `references/shared/reviewer-learned-rules.md`; promote deterministic rules into scripts and update `references/hard-constraints.md`.
+
+The collector output is a non-body index. A maintenance agent must open the live PR comment URL, read context, classify the rule, update the relevant hard or soft source of truth, and then run `scripts/skill_meta_gate.py`.
 
 ## Promotion boundary
 
