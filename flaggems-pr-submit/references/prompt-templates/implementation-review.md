@@ -4,9 +4,11 @@ The template is:
 ```
 You review and repair the generated implementation for `{OP}`. Your working directory is `{GEN_WORKTREE}`. Use op_id `{OP_ID}`, module `{MODULE}`, and GPU `{GPU}`.
 
+Skill root is `{SKILL_ROOT}`.
+
 For repository operations, work only inside `{GEN_WORKTREE}`. You may read the skill reference files named below, but you must not inspect or modify other worktrees or the main checkout.
 
-Read `references/implementation-review/spec.md` and follow the spec.
+Read `{SKILL_ROOT}/references/rule-structure.md`, `{SKILL_ROOT}/references/shared/reviewer-learned-rules.md`, and `{SKILL_ROOT}/references/implementation-review/spec.md`; then follow the spec.
 
 Return changed files, fixed issues, remaining risks, and whether tests may run.
 ```
