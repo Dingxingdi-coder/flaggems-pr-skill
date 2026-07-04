@@ -31,30 +31,37 @@ Do not keep these as skill steps:
 
 ### Hard constraints
 
-Hard constraints are deterministic checks with a stable command-line interface. They belong under `scripts/` and are indexed in `references/hard-constraints.md`. Subagents must run the script instead of reimplementing the check in prose.
+Hard constraints are deterministic checks with a stable command-line interface. The executable script is the source of truth. Do not mirror the same hard-rule table in markdown.
 
-A hard-rule script prints failures as `ERROR[<RULE_ID>]: <message>` and supports `--list-rules`. The current script owners are:
+A hard-rule script prints failures as `ERROR[<RULE_ID>]: <message>` and supports `--list-rules`. Current script owners are:
 
 - `scripts/resolve_op_context.py`: norm-name lookup, special-op mapping, generated worktree resolution, branch check, upstream fetch, upstream kernel/yaml conflict check.
 - `scripts/operator_static_gate.py`: target file-set boundary, KernelGen header, `print()` ban, yaml-id uniqueness, pytest mark alignment, benchmark `op_name` alignment, and `gems_assert_close(..., rtol=...)` ban.
-- `scripts/skill_meta_gate.py`: skill-maintenance consistency across hard-rule scripts, rule manifests, prompt templates, reviewer-learned soft-rule schema, and reviewer-feedback intake documentation.
+- `scripts/skill_meta_gate.py`: skill-maintenance consistency across hard-rule scripts, prompt templates, embedded soft-rule entries, and reviewer-feedback intake documentation.
+
+When a hard rule is added or promoted, update the owning script's `RULES` list, implement the check in that script, and validate the script with `--list-rules`. Stage specs may name the script to run, but should not duplicate the script's rule inventory.
 
 ### Soft constraints
 
-Soft constraints are blocking when clearly violated, but they require code understanding or reviewer-intent judgment. Keep them in stage specs under `references/<subagent>/`, shared specs under `references/shared/`, or the reviewer intake file.
+Soft constraints are blocking when clearly violated, but they require code understanding or reviewer-intent judgment. Keep them directly in the existing spec that owns the scene:
+
+- implementation and semantic test/benchmark repair: `references/implementation-review/spec.md`;
+- test/benchmark execution, fairness, coverage, and performance interpretation: `references/shared/test-benchmark.md`;
+- registration and yaml consistency: `references/register/spec.md`;
+- final validation, git, PR body, and review-response behavior: `references/final-validation/spec.md`.
 
 Examples: target computation must not be a PyTorch fallback, benchmark torch/gems work must be equivalent, probability operators need statistical validation, and unsupported dtype paths need a wrapper check or a test explanation.
 
 Soft-rule maintenance conventions are in `references/soft-constraints.md`.
 
-### Reviewer-learned intake
+### Reviewer-feedback intake
 
-Rules learned from `[KernelGen][Nvidia]` PR reviews are collected through `references/reviewer-feedback-intake.md`. Add semantic rules to `references/shared/reviewer-learned-rules.md`; promote deterministic rules into scripts and update `references/hard-constraints.md`.
+Rules learned from `[KernelGen][Nvidia]` PR reviews are collected through `references/reviewer-feedback-intake.md`. Add semantic rules directly to the applicable existing spec. Promote deterministic rules directly into the owning hard-rule script.
 
-The collector output is a non-body index. A maintenance agent must open the live PR comment URL, read context, classify the rule, update the relevant hard or soft source of truth, and then run `scripts/skill_meta_gate.py`.
+The collector output is a non-body index. A maintenance agent must open the live PR comment URL, read context, classify the rule, update the relevant script or spec, and then run `scripts/skill_meta_gate.py`.
 
 ## Promotion boundary
 
 A reviewer-derived rule is a hard constraint only when a script can detect the violation deterministically from local files, git metadata, normalized operator context, command output, or PR metadata with acceptably low false positives. Otherwise it remains a soft constraint and must be checked by the responsible main or subagent.
 
-When promoting a rule, do not leave duplicated normative prose in multiple stage specs. The script and `references/hard-constraints.md` are the hard-rule source of truth; stage specs should only name the script and describe remaining semantic work.
+When promoting a rule, do not leave duplicated normative prose in multiple stage specs. The script is the hard-rule source of truth; stage specs should only name the script and describe remaining semantic work.
