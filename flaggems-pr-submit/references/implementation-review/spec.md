@@ -4,6 +4,10 @@ Applies to: implementation-review subagent.
 
 This subagent reviews and repairs only the target gen worktree. Generated code is not trusted. Do not inspect or modify other worktrees or the main repository checkout.
 
+Read `references/rule-structure.md` first. Deterministic checks belong to scripts; this stage focuses on semantic review and repair.
+
+Also read `references/shared/reviewer-learned-rules.md` and apply any rules relevant to implementation, tests, or benchmark.
+
 ## Inputs
 
 - `{OP}`: normalized operator name.
@@ -21,30 +25,31 @@ This subagent reviews and repairs only the target gen worktree. Generated code i
 - `src/flag_gems/__init__.py`
 - `conf/operators.yaml`
 
-## Kernel requirements
+## Kernel semantic requirements
 
 The kernel file starts with the KernelGen header. Core computation must use Triton, `pointwise_dynamic`, FlagGems utilities, or existing FlagGems ops. PyTorch may be used only for auxiliary work such as allocation, shape/dtype/device inspection, layout changes, type inference, and complex views.
 
-Blocking issues:
+Blocking semantic issues:
 
 - target computation implemented with PyTorch fallback;
 - wrapper only calls the same torch operator or recurses through dispatch;
 - Triton kernel exists but is not used by the wrapper;
 - duplicate functions or dead exported functions;
-- `print()` in kernel, tests, or benchmark;
 - unused `@use_tl_extra` stubs;
 - unsupported dtype path without wrapper check or test explanation;
 - hardcoded block sizes, shape limits, dtype lists, or platform restrictions without comments.
 
-## Test requirements
+Mechanical checks such as KernelGen header, `print()`, yaml id, pytest mark, benchmark `op_name`, and `gems_assert_close(..., rtol=...)` are enforced later by `scripts/operator_static_gate.py`; still fix obvious violations here when seen.
 
-Tests use relative `accuracy_utils` import, `utils.to_reference`, `utils.gems_assert_close`, and `utils.gems_assert_equal`. `gems_assert_close` must not receive `rtol`. NaN comparisons use `equal_nan=True`.
+## Test semantic requirements
+
+Tests use relative `accuracy_utils` import, `utils.to_reference`, `utils.gems_assert_close`, and `utils.gems_assert_equal`. NaN comparisons use `equal_nan=True`.
 
 Remove quick-mode logic, vendor-specific branches, debug output, and unrelated skips. Probability operators use statistical checks rather than elementwise equality.
 
-## Benchmark requirements
+## Benchmark semantic requirements
 
-Benchmark uses pytest and the project benchmark base wrappers. The pytest mark and benchmark `op_name` must equal yaml `id`. Non-pointwise or complex-input benchmarks need a Benchmark subclass whose shape handling still works under `--level core`.
+Benchmark uses pytest and the project benchmark base wrappers. Non-pointwise or complex-input benchmarks need a Benchmark subclass whose shape handling still works under `--level core`.
 
 The torch side and gems side must have equivalent arguments, computation, dtype coverage, and forward/backward boundary.
 
