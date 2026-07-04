@@ -64,9 +64,9 @@ For every emitted PR item:
 5. Classify the rule.
    - Hard: deterministic from local files, git diff, normalized operator context, command output, or PR metadata.
    - Soft: requires semantic code understanding, reviewer preference interpretation, or risk judgment.
-6. Apply the update.
-   - Hard rule: add or promote it through `references/hard-constraints.md` and the owning script.
-   - Soft rule: append one structured entry to `references/shared/reviewer-learned-rules.md`.
+6. Apply the update directly to the source of truth.
+   - Hard rule: edit the owning script, add a stable rule ID to that script's `RULES` list, implement the check, and ensure failures use `ERROR[<RULE_ID>]`.
+   - Soft rule: append one structured entry directly to the existing spec that owns the scene.
 7. Check stage ownership in `references/constraint-map.md`; update it only when the new rule changes which subagent is responsible.
 8. Validate the skill change by running `--list-rules` for edited hard-rule scripts and by running:
 
@@ -74,7 +74,20 @@ For every emitted PR item:
 python flaggems-pr-submit/scripts/skill_meta_gate.py
 ```
 
-Also check that all relevant prompt templates already force subagents to read the updated reference file.
+Also check that all relevant prompt templates already force subagents to read the updated spec.
+
+## Soft-rule destinations
+
+Use these direct-to-spec destinations:
+
+| Scene | Destination |
+|---|---|
+| implementation semantics, wrapper behavior, dtype guards, torch fallback, generated dead code | `references/implementation-review/spec.md` |
+| accuracy-test semantics, benchmark fairness, benchmark shape coverage, zero cases, speedup interpretation | `references/shared/test-benchmark.md` |
+| registration surfaces, yaml metadata, exported wrapper consistency | `references/register/spec.md` |
+| final validation, staging, commit message, PR body, tested-on data, review-response behavior | `references/final-validation/spec.md` |
+
+Embedded soft-rule entries must use the `SOFT-YYYYMMDD-<short-slug>` format documented in `references/soft-constraints.md`.
 
 ## Scheduled workflow
 
@@ -89,13 +102,13 @@ The workflow only collects and validates intake data. It does not modify the ski
 Use a maintenance commit message that contains the source PR number and the rule class, for example:
 
 ```text
-Add hard rule for benchmark op_name drift from FlagGems PR #1234
+Add hard static rule for benchmark op_name drift from FlagGems PR #1234
 ```
 
 or:
 
 ```text
-Add soft reviewer rule for probability-op validation from FlagGems PR #1234
+Add soft benchmark rule from FlagGems PR #1234
 ```
 
 The commit should include the collector output artifact or PR number in the message, not a long copied reviewer transcript.
