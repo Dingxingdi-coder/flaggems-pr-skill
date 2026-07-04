@@ -4,7 +4,7 @@ Applies to: register subagent.
 
 There is no separate PR branch. Work only inside `{GEN_WORKTREE}`, which should already be on the target generated branch.
 
-Read `references/rule-structure.md` and `references/shared/reviewer-learned-rules.md` before editing. After registration edits, run `scripts/operator_static_gate.py` exactly as instructed by the prompt template.
+Read `references/rule-structure.md`, `references/soft-constraints.md`, and this file's embedded registration soft rules before editing. After registration edits, run `scripts/operator_static_gate.py` exactly as instructed by the prompt template.
 
 ## Inputs
 
@@ -49,6 +49,10 @@ Manually verify semantic consistency not covered by the script:
 - `_out`, inplace, and overload variants are either fully covered or not exported;
 - leading underscore and trailing underscore behavior matches the resolver output;
 - branch diff does not include unrelated operator logic.
+
+## Embedded registration soft rules
+
+No entries yet. Add future registration or yaml soft rules here using the SOFT-YYYYMMDD-short-slug format from `references/soft-constraints.md`.
 
 ## Return format
 
