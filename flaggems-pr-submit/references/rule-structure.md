@@ -27,23 +27,31 @@ Do not keep these as skill steps:
 - staging the whole repository with `git add .`;
 - broad benchmark sweeps unrelated to the target operator.
 
-## Rule types
+## Rule layers
 
-### Mechanical hard rules
+### Hard constraints
 
-Mechanical hard rules are deterministic checks with a stable command-line interface. They belong under `scripts/`, and subagents must run the script instead of reimplementing the check in prose.
+Hard constraints are deterministic checks with a stable command-line interface. They belong under `scripts/` and are indexed in `references/hard-constraints.md`. Subagents must run the script instead of reimplementing the check in prose.
 
-Current scripts:
+A hard-rule script prints failures as `ERROR[<RULE_ID>]: <message>` and supports `--list-rules`. The current script owners are:
 
 - `scripts/resolve_op_context.py`: norm-name lookup, special-op mapping, generated worktree resolution, branch check, upstream fetch, upstream kernel/yaml conflict check.
 - `scripts/operator_static_gate.py`: target file-set boundary, KernelGen header, `print()` ban, yaml-id uniqueness, pytest mark alignment, benchmark `op_name` alignment, and `gems_assert_close(..., rtol=...)` ban.
 
-### Semantic review rules
+### Soft constraints
 
-Semantic review rules are still blocking when clearly violated, but they require code understanding. Keep them in stage specs under `references/<subagent>/` or shared specs under `references/shared/`.
+Soft constraints are blocking when clearly violated, but they require code understanding or reviewer-intent judgment. Keep them in stage specs under `references/<subagent>/`, shared specs under `references/shared/`, or the reviewer intake file.
 
 Examples: target computation must not be a PyTorch fallback, benchmark torch/gems work must be equivalent, probability operators need statistical validation, and unsupported dtype paths need a wrapper check or a test explanation.
 
-### Reviewer-learned soft rules
+Soft-rule maintenance conventions are in `references/soft-constraints.md`.
 
-Rules learned from `[KernelGen][Nvidia]` PR reviews are maintained in `references/shared/reviewer-learned-rules.md`. Add a rule there only after it is observed in contributor/reviewer interaction. If a reviewer-learned rule becomes deterministic and stable, move it into a script and leave a short pointer in the document.
+### Reviewer-learned intake
+
+Rules learned from `[KernelGen][Nvidia]` PR reviews are collected through `references/reviewer-feedback-intake.md`. Add semantic rules to `references/shared/reviewer-learned-rules.md`; promote deterministic rules into scripts and update `references/hard-constraints.md`.
+
+## Promotion boundary
+
+A reviewer-derived rule is a hard constraint only when a script can detect the violation deterministically from local files, git metadata, normalized operator context, command output, or PR metadata with acceptably low false positives. Otherwise it remains a soft constraint and must be checked by the responsible main or subagent.
+
+When promoting a rule, do not leave duplicated normative prose in multiple stage specs. The script and `references/hard-constraints.md` are the hard-rule source of truth; stage specs should only name the script and describe remaining semantic work.
