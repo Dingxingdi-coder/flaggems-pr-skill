@@ -2,8 +2,8 @@
 """Consistency gate for the flaggems-pr-submit skill itself.
 
 This script is for skill maintenance, not for generated operator PR validation.
-It catches drift between hard-rule scripts, rule manifests, prompt templates, and
-reviewer-learned soft-rule entries.
+It catches drift between hard-rule scripts, prompt templates, embedded
+reviewer-derived soft-rule entries, and reviewer-feedback intake docs.
 """
 
 from __future__ import annotations
@@ -23,10 +23,10 @@ class Rule:
 
 
 RULES = [
-    Rule("META-H001", "hard-constraint manifest matches rule IDs exposed by hard-rule scripts"),
-    Rule("META-H002", "stage prompt templates invoke the required hard-rule scripts and reviewer-learned rules"),
-    Rule("META-H003", "reviewer-learned soft-rule entries follow the required schema"),
-    Rule("META-H004", "reviewer-feedback intake document describes the collector metadata contract"),
+    Rule("META-H001", "hard-rule scripts expose well-formed unique rule IDs through --list-rules"),
+    Rule("META-H002", "stage prompt templates invoke the required hard-rule scripts and spec files"),
+    Rule("META-H003", "embedded reviewer-derived soft-rule entries follow schema and retired ledgers stay absent"),
+    Rule("META-H004", "reviewer-feedback intake document describes the collector metadata contract and direct-to-spec update path"),
 ]
 
 HARD_RULE_SCRIPTS = [
@@ -37,22 +37,31 @@ HARD_RULE_SCRIPTS = [
 
 REQUIRED_TEMPLATE_REFERENCES = {
     "references/prompt-templates/name-worktree.md": ["rule-structure.md", "name-worktree/spec.md", "resolve_op_context.py"],
-    "references/prompt-templates/implementation-review.md": ["rule-structure.md", "reviewer-learned-rules.md", "implementation-review/spec.md"],
+    "references/prompt-templates/implementation-review.md": [
+        "rule-structure.md",
+        "shared/test-benchmark.md",
+        "implementation-review/spec.md",
+    ],
     "references/prompt-templates/worktree-test-benchmark.md": [
         "rule-structure.md",
-        "reviewer-learned-rules.md",
         "shared/test-benchmark.md",
         "worktree-test-benchmark/spec.md",
     ],
-    "references/prompt-templates/register.md": ["rule-structure.md", "reviewer-learned-rules.md", "register/spec.md", "operator_static_gate.py"],
+    "references/prompt-templates/register.md": ["rule-structure.md", "register/spec.md", "operator_static_gate.py"],
     "references/prompt-templates/final-validation.md": [
         "rule-structure.md",
-        "reviewer-learned-rules.md",
         "shared/test-benchmark.md",
         "final-validation/spec.md",
         "operator_static_gate.py",
     ],
 }
+
+SOFT_RULE_FILES = [
+    "references/implementation-review/spec.md",
+    "references/shared/test-benchmark.md",
+    "references/register/spec.md",
+    "references/final-validation/spec.md",
+]
 
 SOFT_REQUIRED_FIELDS = [
     "Source",
@@ -61,6 +70,16 @@ SOFT_REQUIRED_FIELDS = [
     "Fix pattern",
     "Applies to",
     "Promotion candidate",
+]
+
+RETIRED_FILES = [
+    "references/hard-constraints.md",
+    "references/shared/reviewer-learned-rules.md",
+]
+
+RETIRED_MARKDOWN_TERMS = [
+    "hard-constraints.md",
+    "reviewer-learned-rules.md",
 ]
 
 INTAKE_REQUIRED_TERMS = [
@@ -73,6 +92,12 @@ INTAKE_REQUIRED_TERMS = [
     "line",
     "--include-pr-author",
     "--include-bots",
+    "direct-to-spec",
+    "implementation-review/spec.md",
+    "shared/test-benchmark.md",
+    "register/spec.md",
+    "final-validation/spec.md",
+    "owning script",
 ]
 
 Error = tuple[str, str]
@@ -123,6 +148,10 @@ def list_rules_from_script(root: Path, script_relative_path: str) -> dict[str, s
             rule_id, description = line.split("\t", 1)
         except ValueError as exc:
             raise RuntimeError(f"{script_relative_path} emitted a malformed --list-rules line: {line!r}") from exc
+        if not re.fullmatch(r"(?:RESOLVE|STATIC|META)-H\d{3}", rule_id):
+            raise RuntimeError(f"{script_relative_path} emitted invalid rule id {rule_id}")
+        if not description.strip():
+            raise RuntimeError(f"{script_relative_path} emitted an empty description for {rule_id}")
         if rule_id in rules:
             raise RuntimeError(f"{script_relative_path} emits duplicate rule id {rule_id}")
         rules[rule_id] = description
@@ -131,35 +160,22 @@ def list_rules_from_script(root: Path, script_relative_path: str) -> dict[str, s
     return rules
 
 
-def check_hard_manifest(root: Path, errors: list[Error]) -> None:
-    try:
-        manifest = read_text(root, "references/hard-constraints.md")
-    except FileNotFoundError:
-        add_error(errors, "META-H001", "references/hard-constraints.md is missing")
-        return
-
-    script_rule_ids: dict[str, str] = {}
+def check_hard_scripts(root: Path, errors: list[Error]) -> None:
+    seen_rule_ids: dict[str, str] = {}
     for script in HARD_RULE_SCRIPTS:
-        if script not in manifest:
-            add_error(errors, "META-H001", f"hard-constraints.md does not reference {script}")
+        path = root / script
+        if not path.is_file():
+            add_error(errors, "META-H001", f"hard-rule script is missing: {script}")
+            continue
         try:
             rules = list_rules_from_script(root, script)
         except RuntimeError as exc:
             add_error(errors, "META-H001", str(exc))
             continue
         for rule_id in rules:
-            if rule_id in script_rule_ids:
-                add_error(errors, "META-H001", f"rule id {rule_id} is emitted by both {script_rule_ids[rule_id]} and {script}")
-            script_rule_ids[rule_id] = script
-
-    documented_ids = set(re.findall(r"\b(?:RESOLVE|STATIC|META)-H\d{3}\b", manifest))
-    emitted_ids = set(script_rule_ids)
-    missing = sorted(emitted_ids - documented_ids)
-    orphaned = sorted(documented_ids - emitted_ids)
-    if missing:
-        add_error(errors, "META-H001", "hard-constraints.md is missing emitted rule ids: " + ", ".join(missing))
-    if orphaned:
-        add_error(errors, "META-H001", "hard-constraints.md documents rule ids not emitted by scripts: " + ", ".join(orphaned))
+            if rule_id in seen_rule_ids:
+                add_error(errors, "META-H001", f"rule id {rule_id} is emitted by both {seen_rule_ids[rule_id]} and {script}")
+            seen_rule_ids[rule_id] = script
 
 
 def check_prompt_templates(root: Path, errors: list[Error]) -> None:
@@ -200,20 +216,31 @@ def soft_sections(text: str) -> list[tuple[str, list[str]]]:
     return [(heading, lines) for heading, lines in sections if heading.startswith("### SOFT-")]
 
 
-def check_soft_rule_schema(root: Path, errors: list[Error]) -> None:
-    path = root / "references/shared/reviewer-learned-rules.md"
-    if not path.is_file():
-        add_error(errors, "META-H003", "references/shared/reviewer-learned-rules.md is missing")
-        return
+def check_embedded_soft_rules_and_retired_ledgers(root: Path, errors: list[Error]) -> None:
+    for retired_file in RETIRED_FILES:
+        if (root / retired_file).exists():
+            add_error(errors, "META-H003", f"retired centralized rule ledger still exists: {retired_file}")
 
-    for heading, lines in soft_sections(path.read_text(encoding="utf-8")):
-        if not re.fullmatch(r"### SOFT-\d{8}-[a-z0-9-]+", heading):
-            add_error(errors, "META-H003", f"soft-rule heading has invalid format: {heading}")
+    for markdown_path in root.rglob("*.md"):
+        relative = markdown_path.relative_to(root).as_posix()
+        text = markdown_path.read_text(encoding="utf-8")
+        for term in RETIRED_MARKDOWN_TERMS:
+            if term in text:
+                add_error(errors, "META-H003", f"{relative} still references retired ledger {term}")
+
+    for soft_rule_file in SOFT_RULE_FILES:
+        path = root / soft_rule_file
+        if not path.is_file():
+            add_error(errors, "META-H003", f"soft-rule destination file is missing: {soft_rule_file}")
             continue
-        body = "\n".join(lines)
-        missing = [field for field in SOFT_REQUIRED_FIELDS if re.search(rf"(?m)^- {re.escape(field)}:\s*\S", body) is None]
-        if missing:
-            add_error(errors, "META-H003", f"{heading} is missing required fields: {', '.join(missing)}")
+        for heading, lines in soft_sections(path.read_text(encoding="utf-8")):
+            if not re.fullmatch(r"### SOFT-\d{8}-[a-z0-9-]+", heading):
+                add_error(errors, "META-H003", f"soft-rule heading has invalid format in {soft_rule_file}: {heading}")
+                continue
+            body = "\n".join(lines)
+            missing = [field for field in SOFT_REQUIRED_FIELDS if re.search(rf"(?m)^- {re.escape(field)}:\s*\S", body) is None]
+            if missing:
+                add_error(errors, "META-H003", f"{soft_rule_file} {heading} is missing required fields: {', '.join(missing)}")
 
 
 def check_intake_contract(root: Path, errors: list[Error]) -> None:
@@ -241,9 +268,9 @@ def main() -> None:
 
     root = skill_root()
     errors: list[Error] = []
-    check_hard_manifest(root, errors)
+    check_hard_scripts(root, errors)
     check_prompt_templates(root, errors)
-    check_soft_rule_schema(root, errors)
+    check_embedded_soft_rules_and_retired_ledgers(root, errors)
     check_intake_contract(root, errors)
 
     if errors:
