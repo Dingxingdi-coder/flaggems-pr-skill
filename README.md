@@ -7,8 +7,8 @@ Entry point: `flaggems-pr-submit/SKILL.md`.
 Current design:
 
 - the main agent still dispatches one operator-specific subagent sequence per generated `gen-*` worktree;
-- mechanical hard constraints live in `flaggems-pr-submit/scripts/`, expose stable rule IDs, and are indexed by `flaggems-pr-submit/references/hard-constraints.md`;
-- semantic soft constraints live in `flaggems-pr-submit/references/<subagent>/`, `flaggems-pr-submit/references/shared/`, and `flaggems-pr-submit/references/soft-constraints.md`;
-- reviewer-derived soft rules are maintained in `flaggems-pr-submit/references/shared/reviewer-learned-rules.md` and promoted to scripts only when they become deterministic;
+- mechanical hard constraints live only in `flaggems-pr-submit/scripts/`; each hard-rule script exposes stable rule IDs through `--list-rules`;
+- semantic soft constraints live directly in existing stage and shared specs under `flaggems-pr-submit/references/`;
+- reviewer-derived deterministic rules are promoted directly into the owning hard-rule script; reviewer-derived semantic rules are appended to the applicable existing spec instead of a central learned-rule ledger;
 - nightly reviewer-feedback intake is documented in `flaggems-pr-submit/references/reviewer-feedback-intake.md` and supported by `flaggems-pr-submit/scripts/collect_kernelgen_review_delta.py`;
-- skill-maintenance consistency is checked by `flaggems-pr-submit/scripts/skill_meta_gate.py` so hard-rule scripts, manifests, prompt templates, and reviewer-learned rule entries do not drift.
+- skill-maintenance consistency is checked by `flaggems-pr-submit/scripts/skill_meta_gate.py` so hard-rule scripts, prompt templates, embedded soft-rule entries, and reviewer-feedback intake docs do not drift.
