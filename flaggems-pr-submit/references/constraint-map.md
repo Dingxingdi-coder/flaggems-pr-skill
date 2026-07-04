@@ -28,3 +28,4 @@ Use this map to decide where a new rule belongs. `Hard` means the owning script 
 | PR body completeness and truthful performance data | Soft | `final-validation/spec.md` | `final-validation` |
 | Review follow-up exclusion for initial PR creation | Soft | `SKILL.md` scope | main agent, `final-validation` |
 | Reviewer-derived rule intake and promotion | Soft-to-hard workflow | `reviewer-feedback-intake.md`, `soft-constraints.md`, `hard-constraints.md` | maintenance agent |
+| Skill rule/document/template consistency | Hard | `skill_meta_gate.py` / `META-H001` to `META-H004` | maintenance agent |
