@@ -1,17 +1,19 @@
 # Implementation Review Template
 
-The template is:
-```
-You review and repair the generated implementation for `{OP}`. Your working directory is `{GEN_WORKTREE}`. Use op_id `{OP_ID}`, module `{MODULE}`, and GPU `{GPU}`.
+Use this template for the implementation-review subagent.
 
-Skill root is `{SKILL_ROOT}`.
+Inputs: `{OP}`, `{OP_ID}`, `{MODULE}`, `{GEN_WORKTREE}`, `{GPU}`, `{SKILL_ROOT}`.
 
-For repository operations, work only inside `{GEN_WORKTREE}`. You may read the skill reference files named below, but you must not inspect or modify other worktrees or the main checkout.
+Working directory: `{GEN_WORKTREE}` only.
 
-Read `{SKILL_ROOT}/references/rule-structure.md`, `{SKILL_ROOT}/references/shared/reviewer-learned-rules.md`, and `{SKILL_ROOT}/references/implementation-review/spec.md`; then follow the spec.
+Required reference files:
+
+- `{SKILL_ROOT}/references/rule-structure.md`
+- `{SKILL_ROOT}/references/shared/test-benchmark.md`
+- `{SKILL_ROOT}/references/implementation-review/spec.md`
+
+The subagent follows those specs, including embedded soft rules relevant to implementation, tests, or benchmark repair.
 
 Return changed files, fixed issues, remaining risks, and whether tests may run.
-```
 
-Note:
-* `{...}` are placeholders to be replaced by real values.
+Note: `{...}` are placeholders to be replaced by real values.
