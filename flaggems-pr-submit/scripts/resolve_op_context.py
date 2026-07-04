@@ -3,7 +3,8 @@
 
 Hard constraints in this resolver are identified by stable rule IDs. When a
 reviewer-learned naming/worktree/upstream-conflict rule becomes deterministic,
-add it here, emit a RESOLVE-H* failure, and update references/hard-constraints.md.
+add it here, emit a RESOLVE-H* failure, and validate this script with
+``--list-rules``.
 """
 
 from __future__ import annotations
