@@ -48,8 +48,6 @@ Each stage must be run by a subagent using its corresponding prompt template.
 
 Before dispatching any subagent, replace every `{...}` placeholder in the relevant template.
 
-Subagents must work only inside `{GEN_WORKTREE}` for repository edits and commands. They may read this skill’s references and run this skill’s runtime scripts. Apart from upstream read-only checks, they must not inspect or edit other worktrees.
-
 If any stage blocks, stop that operator immediately and report the blocked stage, the command that failed or blocked, the reason, and the required user input or repair direction. 
 
 Do not skip stages, invent benchmark results, or fabricate multi-backend data.

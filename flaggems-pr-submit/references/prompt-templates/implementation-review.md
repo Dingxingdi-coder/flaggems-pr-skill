@@ -19,6 +19,3 @@ Review and repair implementation, tests, benchmark code, and registration-adjace
 
 Return changed files, fixed issues, remaining risks, tests or benchmarks that should run next, and blocking issues.
 ````
-
-Note:
-* `{...}` are placeholders replaced by the main agent.
