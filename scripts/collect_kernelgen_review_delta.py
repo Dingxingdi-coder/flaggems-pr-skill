@@ -12,6 +12,11 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+try:
+    from tqdm import tqdm
+except ImportError:
+    tqdm = None  # type: ignore[assignment]
+
 REPO = "flagos-ai/FlagGems"
 TITLE_PREFIX = "[KernelGen][Nvidia]"
 
@@ -76,43 +81,73 @@ def run_gh_json(args: list[str]) -> dict[str, Any]:
     return payload
 
 
-def query_all_prs() -> list[PullRequest]:
+def query_all_prs(since: datetime | None = None, progress: bool = False) -> list[PullRequest]:
+    if progress and tqdm is None:
+        raise SystemExit("tqdm is required for --progress; install it with `python -m pip install tqdm`")
+
     owner, name = REPO.split("/", 1)
     after: str | None = None
     prs: list[PullRequest] = []
+    scanned = 0
 
-    while True:
-        args = ["api", "graphql", "-f", f"query={PR_QUERY}", "-f", f"owner={owner}", "-f", f"name={name}"]
-        if after:
-            args.extend(["-f", f"after={after}"])
-        payload = run_gh_json(args)
-        pull_requests = payload.get("data", {}).get("repository", {}).get("pullRequests", {})
-        for node in pull_requests.get("nodes", []):
-            if not isinstance(node, dict):
-                continue
-            title = str(node.get("title") or "")
-            if not title.startswith(TITLE_PREFIX):
-                continue
-            updated_at_raw = str(node.get("updatedAt") or "")
-            prs.append(
-                PullRequest(
-                    number=int(node["number"]),
-                    title=title,
-                    url=str(node.get("url") or ""),
-                    updated_at=parse_timestamp(updated_at_raw),
+    pbar = tqdm(desc="Fetching PR pages", unit="page", dynamic_ncols=True) if progress else None
+
+    try:
+        while True:
+            args = ["api", "graphql", "-f", f"query={PR_QUERY}", "-f", f"owner={owner}", "-f", f"name={name}"]
+            if after:
+                args.extend(["-f", f"after={after}"])
+            payload = run_gh_json(args)
+            pull_requests = payload.get("data", {}).get("repository", {}).get("pullRequests", {})
+
+            should_stop = False
+
+            for node in pull_requests.get("nodes", []):
+                if not isinstance(node, dict):
+                    continue
+
+                updated_at_raw = str(node.get("updatedAt") or "")
+                updated_at = parse_timestamp(updated_at_raw)
+                scanned += 1
+
+                if since is not None and updated_at <= since:
+                    should_stop = True
+                    break
+
+                title = str(node.get("title") or "")
+                if not title.startswith(TITLE_PREFIX):
+                    continue
+
+                prs.append(
+                    PullRequest(
+                        number=int(node["number"]),
+                        title=title,
+                        url=str(node.get("url") or ""),
+                        updated_at=updated_at,
+                    )
                 )
-            )
 
-        page_info = pull_requests.get("pageInfo", {})
-        if not page_info.get("hasNextPage"):
-            break
-        after = page_info.get("endCursor")
+            if pbar is not None:
+                pbar.update(1)
+                pbar.set_postfix(scanned=scanned, matched=len(prs))
+
+            page_info = pull_requests.get("pageInfo", {})
+            if should_stop or not page_info.get("hasNextPage"):
+                break
+
+            after = page_info.get("endCursor")
+            if not after:
+                break
+    finally:
+        if pbar is not None:
+            pbar.close()
+
     return prs
 
 
-def collect_updated_prs(since: datetime) -> list[PullRequest]:
+def collect_updated_prs(since: datetime, progress: bool = False) -> list[PullRequest]:
     by_number: dict[int, PullRequest] = {}
-    for pr in query_all_prs():
+    for pr in query_all_prs(since=since, progress=progress):
         if pr.updated_at > since:
             by_number[pr.number] = pr
     return sorted(by_number.values(), key=lambda pr: pr.number)
@@ -130,6 +165,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--self-test", action="store_true", help="run local timestamp parsing self-test without calling GitHub")
     parser.add_argument("--since", required="--self-test" not in sys.argv, help="UTC or offset timestamp; only PRs with updatedAt greater than this value are printed")
+    parser.add_argument("--progress", action="store_true", help="show tqdm progress while querying GitHub")
     args = parser.parse_args()
     if args.self_test:
         return args
@@ -146,7 +182,7 @@ def main() -> None:
         run_self_test()
         return
 
-    updated = collect_updated_prs(args.since_dt)
+    updated = collect_updated_prs(args.since_dt, progress=args.progress)
     if not updated:
         print(f"No [KernelGen][Nvidia] PRs updated after {args.since}.")
         return

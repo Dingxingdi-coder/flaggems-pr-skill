@@ -8,10 +8,12 @@ Top-level `scripts/` contains skill maintenance tools. These tools are not part 
 
 ## Reviewer Delta
 
+Make sure you login to GitHub CLI with `gh auth login` before running the collector.
+
 Collect PRs that may contain new review signal:
 
 ```bash
-python scripts/collect_kernelgen_review_delta.py --since 2026-07-04T00:00:00Z
+python scripts/collect_kernelgen_review_delta.py --since 2026-07-04T00:00:00Z > ~/.cache/daily_collect.json
 ```
 
 The collector uses the local `gh` CLI, queries open, closed, and merged PRs in `flagos-ai/FlagGems`, filters titles with `title.startswith("[KernelGen][Nvidia]")`, and prints only PR metadata for PRs with `updatedAt > --since`. It does not keep a state file, read comment bodies, classify reviewers, classify authors, or filter bots.
