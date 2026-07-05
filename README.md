@@ -29,7 +29,7 @@ No [KernelGen][Nvidia] PRs updated after <since>.
 Copy this prompt for the cloud agent, then paste the JSON output from `scripts/collect_kernelgen_review_delta.py`.
 
 ```text
-You are maintaining the skill repository for `flaggems-pr-submit`.
+You are maintaining the skill repository for `Dingxingdi-coder/flaggems-pr-submit`.
 
 Do not use the `flaggems-pr-submit` skill. This is skill maintenance, not a FlagGems PR submission.
 
