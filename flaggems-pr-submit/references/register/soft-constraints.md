@@ -2,10 +2,14 @@
 
 You must create a task for each of these items and check them in order:
 
-- Append to related existing test or benchmark files only when preserving existing functions and adding target operator coverage.
+- Append to related existing kernel, test, and benchmark files for the same operator family only when preserving existing functions and adding target operator coverage.
 - Kernel files must keep the KernelGen header and export only target wrappers.
 - Exported wrappers must be registered, tested, and benchmarked consistently.
 - `_out`, inplace, and overload variants must either be fully covered or remain unexported.
-- Leading underscore and trailing underscore behavior must match the resolver output and public operator id.
+- Leading underscores remain part of public operator ids when required, but trailing-underscore inplace variants must use the canonical non-suffixed operator-family files.
 - Generated shared-file layouts must be adapted to the current upstream FlagGems registration layout inside the generated worktree.
 - Target files, pytest marks, benchmark `op_name`, yaml id, ops package exports, and top-level dispatch registration must describe the same public operator id.
+- Keep new entries in `conf/operators.yaml`, `src/flag_gems/__init__.py`, and `src/flag_gems/ops/__init__.py` in the surrounding sorted order.
+- When a target operator is an alias or overload of an existing FlagGems implementation, register and cover the existing implementation instead of adding duplicate wrappers, kernels, tests, or benchmarks.
+- Place non-ATen fused or custom operators under `src/flag_gems/fused` and keep ATen overrides under `src/flag_gems/ops`.
+- Populate `conf/operators.yaml` labels, kind, stages, and `for` entries from the current upstream taxonomy for the actual public Torch or fused operator.
