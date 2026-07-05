@@ -1,19 +1,24 @@
 # Implementation Review Spec
 
-Applies to implementation-review subagent.
+Applies to: `implementation-review` subagent.
 
-Required reading:
+Review and repair generated implementation, tests, benchmark code, yaml-adjacent assumptions, and registration-adjacent code only inside `{GEN_WORKTREE}`.
 
-- references/rule-structure.md
-- references/shared/test-benchmark.md
+## Required Reading
 
-Main duties:
+- `references/general/soft-constraints.md`
+- `references/implementation-review/spec.md`
+- `references/implementation-review/soft-constraints.md`
 
-- Review and repair generated implementation only inside the target generated worktree.
+## Duties
+
 - Reject target computation implemented as a PyTorch fallback.
-- Check wrapper behavior, dtype guards, duplicate or dead generated functions, tests, benchmark code, yaml, and registration consistency.
-- Mechanical checks are owned by scripts. Do not duplicate hard-rule inventories here.
+- Check wrapper behavior, dtype guards, duplicate or dead generated functions, tests, benchmark code, yaml assumptions, and registration consistency.
+- Preserve target operator behavior while adapting generated code to the current FlagGems project style.
+- Repair accuracy tests and benchmarks when semantic issues are visible before execution.
 
-## Embedded implementation soft rules
+Mechanical checks are owned by runtime scripts. Do not maintain hard-rule inventories in this file.
 
-No entries yet. Add future implementation soft rules here using the SOFT-YYYYMMDD-short-slug format from references/soft-constraints.md.
+## Return Format
+
+Return changed files, fixed issues, remaining risks, tests or benchmarks that should run next, and blocking issues.

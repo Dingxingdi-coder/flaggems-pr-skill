@@ -1,14 +1,73 @@
 # flaggems-pr-skill
 
-This repository contains the `flaggems-pr-submit` skill.
+This repository maintains the `flaggems-pr-submit` skill.
 
-Entry point: `flaggems-pr-submit/SKILL.md`.
+`flaggems-pr-submit/` is the formal skill directory. It is only for initial PR submission of FlagGems NVIDIA general operators generated from `gen-*` worktrees.
 
-Current design:
+Top-level `scripts/` contains skill maintenance tools. These tools are not part of the runtime PR submission skill and must not be copied into `flaggems-pr-submit/`.
 
-- the main agent still dispatches one operator-specific subagent sequence per generated `gen-*` worktree;
-- mechanical hard constraints live only in `flaggems-pr-submit/scripts/`; each hard-rule script exposes stable rule IDs through `--list-rules`;
-- semantic soft constraints live directly in existing stage and shared specs under `flaggems-pr-submit/references/`;
-- reviewer-derived deterministic rules are promoted directly into the owning hard-rule script; reviewer-derived semantic rules are appended to the applicable existing spec instead of a central learned-rule ledger;
-- nightly reviewer-feedback intake is documented in `flaggems-pr-submit/references/reviewer-feedback-intake.md` and supported by `flaggems-pr-submit/scripts/collect_kernelgen_review_delta.py`;
-- skill-maintenance consistency is checked by `flaggems-pr-submit/scripts/skill_meta_gate.py` so hard-rule scripts, prompt templates, embedded soft-rule entries, and reviewer-feedback intake docs do not drift.
+## Reviewer Delta
+
+Collect PRs that may contain new review signal:
+
+```bash
+python scripts/collect_kernelgen_review_delta.py --since 2026-07-04T00:00:00Z
+```
+
+The collector uses the local `gh` CLI, queries open, closed, and merged PRs in `flagos-ai/FlagGems`, filters titles with `title.startswith("[KernelGen][Nvidia]")`, and prints only PR metadata for PRs with `updatedAt > --since`. It does not keep a state file, read comment bodies, classify reviewers, classify authors, or filter bots.
+
+When the collector prints JSON, paste that JSON into the cloud daily evolution agent. When there are no matching updates, it prints:
+
+```text
+No [KernelGen][Nvidia] PRs updated after <since>.
+```
+
+## Daily Evolution Agent Prompt
+
+Copy this prompt for the cloud agent, then paste the JSON output from `scripts/collect_kernelgen_review_delta.py`.
+
+```text
+You are maintaining the local skill repository for `flaggems-pr-submit`.
+
+Do not use the `flaggems-pr-submit` skill. This is skill maintenance, not a FlagGems PR submission.
+
+The user will paste JSON produced by `scripts/collect_kernelgen_review_delta.py`. Use the internet to open each listed PR in `flagos-ai/FlagGems`. Focus on review and discussion updates after `review_updates_after`, including newly added or edited discussion content. Decide for yourself which updates are effective reviewer feedback.
+
+Only preserve constraints that generalize to future `[KernelGen][Nvidia]` PRs. Ignore one-off issues. Do not duplicate feedback already covered by existing constraints; improve an existing rule or script only when needed.
+
+Classify before editing:
+
+- hard vs soft;
+- general vs a specific subagent stage.
+
+A hard constraint must be stable, low false-positive and low false-negative, and mechanically checkable by a local script. Otherwise prefer a soft constraint.
+
+Write soft constraints only to one of these files:
+
+- `flaggems-pr-submit/references/general/soft-constraints.md`
+- `flaggems-pr-submit/references/implementation-review/soft-constraints.md`
+- `flaggems-pr-submit/references/worktree-test-benchmark/soft-constraints.md`
+- `flaggems-pr-submit/references/register/soft-constraints.md`
+- `flaggems-pr-submit/references/final-validation/soft-constraints.md`
+
+Each soft constraint must be one clear actionable sentence. Do not include reviewer sources, examples, counterexamples, or long explanations in the soft-constraints files.
+
+Write or modify hard constraints only in the owning runtime script under `flaggems-pr-submit/scripts/`. Use a stable rule id and add the smallest useful test or self-check for that script.
+
+Do not modify this README during daily maintenance unless the maintenance workflow itself changes.
+
+When finished, run:
+
+- `python scripts/skill_meta_gate.py`
+- the test or self-check for each modified hard-constraint script
+
+Return a concise summary of the constraints changed and validation commands run.
+```
+
+## Structure Gate
+
+Run the maintenance gate after structural changes:
+
+```bash
+python scripts/skill_meta_gate.py
+```

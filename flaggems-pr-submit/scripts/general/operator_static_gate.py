@@ -91,6 +91,16 @@ def print_rule_list() -> None:
         print(f"{rule.rule_id}\t{rule.description}")
 
 
+def run_self_test() -> None:
+    assert contains_pytest_mark("@pytest.mark.foo", "foo")
+    assert contains_pytest_mark("pytestmark = pytest.mark.foo", "foo")
+    assert contains_benchmark_op_name('op_name="foo"', "foo")
+    assert contains_benchmark_op_name("op_name = 'foo'", "foo")
+    assert is_python_under("tests/test_foo.py", "tests")
+    assert not is_python_under("docs/test_foo.py", "tests")
+    print("PASS operator_static_gate self-test")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--op")
@@ -98,9 +108,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--module")
     parser.add_argument("--base-ref", default="refs/remotes/upstream/master")
     parser.add_argument("--list-rules", action="store_true", help="print hard-rule IDs enforced by this script")
+    parser.add_argument("--self-test", action="store_true", help="run local static-gate self-test without reading a worktree")
     args = parser.parse_args()
 
-    if args.list_rules:
+    if args.list_rules or args.self_test:
         return args
 
     missing = [name for name in ("op", "op_id", "module") if getattr(args, name) is None]
@@ -113,6 +124,9 @@ def main() -> None:
     args = parse_args()
     if args.list_rules:
         print_rule_list()
+        return
+    if args.self_test:
+        run_self_test()
         return
 
     errors: list[Error] = []

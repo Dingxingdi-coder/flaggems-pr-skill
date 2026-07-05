@@ -155,6 +155,15 @@ def print_rule_list() -> None:
         print(f"{rule.rule_id}\t{rule.description}")
 
 
+def run_self_test() -> None:
+    assert strip_aten("aten::add") == "add"
+    assert strip_aten("add") == "add"
+    assert resolve_module_and_id("__and__") == ("_and_", "and_op")
+    assert resolve_module_and_id("foo") == ("foo", "foo")
+    assert resolve_module_and_id("_foo") == ("_foo", "foo")
+    print("PASS resolve_op_context self-test")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--raw-op")
@@ -163,9 +172,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--upstream", default="upstream")
     parser.add_argument("--base-branch", default="master")
     parser.add_argument("--list-rules", action="store_true", help="print hard-rule IDs enforced by this script")
+    parser.add_argument("--self-test", action="store_true", help="run local resolver self-test without reading a worktree")
     args = parser.parse_args()
 
-    if args.list_rules:
+    if args.list_rules or args.self_test:
         return args
 
     missing = [name for name in ("raw_op", "norm_xlsx", "worktree_root") if getattr(args, name) is None]
@@ -178,6 +188,9 @@ def main() -> None:
     args = parse_args()
     if args.list_rules:
         print_rule_list()
+        return
+    if args.self_test:
+        run_self_test()
         return
 
     op = resolve_norm_name(args.raw_op, args.norm_xlsx)

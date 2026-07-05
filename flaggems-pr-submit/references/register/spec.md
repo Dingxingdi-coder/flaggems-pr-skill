@@ -1,22 +1,18 @@
 # Register Spec
 
-Applies to: register subagent.
+Applies to: `register` subagent.
 
 There is no separate PR branch. Work only inside `{GEN_WORKTREE}`, which should already be on the target generated branch.
 
-Read `references/rule-structure.md`, `references/soft-constraints.md`, and this file's embedded registration soft rules before editing. After registration edits, run `scripts/operator_static_gate.py` exactly as instructed by the prompt template.
+## Required Reading
 
-## Inputs
+- `references/general/soft-constraints.md`
+- `references/register/spec.md`
+- `references/register/soft-constraints.md`
 
-- `{OP}`: normalized operator name.
-- `{OP_ID}`: public operator id used by pytest mark, yaml id, test file, benchmark file, and benchmark `op_name`.
-- `{MODULE}`: target module/kernel filename stem under `src/flag_gems/ops/`.
-- `{GEN_WORKTREE}`: generated worktree path for this operator.
-- `{UPSTREAM_REF}`: fetched upstream ref produced by the resolver script.
+## Expected Changed Files
 
-## Expected changed files
-
-The gen branch should normally change these file groups only:
+The generated branch should normally change only these file groups:
 
 - `src/flag_gems/ops/<module>.py`
 - `src/flag_gems/ops/__init__.py`
@@ -27,33 +23,25 @@ The gen branch should normally change these file groups only:
 
 Append mode is allowed for a related existing test or benchmark file. Preserve existing functions and append only target operator code.
 
-## In-worktree adaptation
+## Duties
 
-If generated files use an old shared-file layout, adapt them inside `{GEN_WORKTREE}` to the current upstream layout expected by FlagGems.
+- Adapt generated files that use an old shared-file layout to the current upstream FlagGems layout.
+- Ensure the kernel has the KernelGen header and only target wrapper exports.
+- Create or append the target test file using project import style.
+- Create or append the benchmark file while preserving required Benchmark subclasses.
+- Update the ops package import/export list, top-level dispatch registration, and `conf/operators.yaml`.
+- Manually verify exported wrappers are registered, tested, and benchmarked consistently.
 
-Ensure the kernel has the KernelGen header and only target wrapper exports. Preserve valuable comments.
+## Hard Constraints
 
-Create or append the target test file. Use project import style and rename generated `test_accuracy_<op_id>` style functions to `test_<op_id>` when needed.
+After registration edits, run:
 
-Create or append the benchmark file. Preserve custom Benchmark subclasses needed for non-pointwise or complex input generation.
+```bash
+python "{SKILL_ROOT}/scripts/general/operator_static_gate.py" --op "{OP}" --op-id "{OP_ID}" --module "{MODULE}" --base-ref "{UPSTREAM_REF}"
+```
 
-Update the ops package import/export list, top-level dispatch registration, and `conf/operators.yaml`.
+The static gate owns mechanical checks for changed-file boundary, required files, KernelGen header, debug `print()`, yaml id uniqueness, pytest mark alignment, benchmark `op_name` alignment, and `gems_assert_close(..., rtol=...)`.
 
-## Consistency checks
+## Return Format
 
-Run the static gate. It mechanically checks changed-file boundary, KernelGen header, `print()`, yaml id uniqueness, pytest mark alignment, benchmark `op_name`, and `gems_assert_close(..., rtol=...)`.
-
-Manually verify semantic consistency not covered by the script:
-
-- exported wrappers are registered, tested, and benchmarked;
-- `_out`, inplace, and overload variants are either fully covered or not exported;
-- leading underscore and trailing underscore behavior matches the resolver output;
-- branch diff does not include unrelated operator logic.
-
-## Embedded registration soft rules
-
-No entries yet. Add future registration or yaml soft rules here using the SOFT-YYYYMMDD-short-slug format from `references/soft-constraints.md`.
-
-## Return format
-
-Return changed files, registration surfaces touched, static gate command/result, unresolved inconsistencies, and blocking issues.
+Return changed files, registration surfaces touched, static gate command and result, unresolved inconsistencies, and blocking issues.

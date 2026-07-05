@@ -1,17 +1,21 @@
 # Final Validation Spec
 
-Applies to: final-validation subagent.
+Applies to: `final-validation` subagent.
 
-The final subagent works in `{GEN_WORKTREE}` on the generated branch. Do not create `pr/<op>`.
+The final validation subagent works in `{GEN_WORKTREE}` on the generated branch. Do not create `pr/<op>`.
 
-Read `references/rule-structure.md`, `references/soft-constraints.md`, `references/shared/test-benchmark.md`, and this file's embedded final soft rules before running the final gate.
+## Required Reading
+
+- `references/general/soft-constraints.md`
+- `references/final-validation/spec.md`
+- `references/final-validation/soft-constraints.md`
 
 ## Inputs
 
 - `{OP}`: normalized operator name.
 - `{OP_ID}`: public operator id used by pytest mark, yaml id, test file, benchmark file, and benchmark `op_name`.
 - `{MODULE}`: target module/kernel filename stem under `src/flag_gems/ops/`.
-- `{GEN_WORKTREE}`: generated worktree path for this operator.
+- `{GEN_WORKTREE}`: generated worktree path.
 - `{GPU}`: assigned GPU id.
 - `{FORK_REMOTE}`: remote used to publish the generated branch.
 - `{UPSTREAM_REPO}`: upstream GitHub repository, normally `flagos-ai/FlagGems`.
@@ -19,51 +23,46 @@ Read `references/rule-structure.md`, `references/soft-constraints.md`, `referenc
 - `{UPSTREAM_REF}`: fetched upstream ref produced by the resolver script.
 - `{TESTED_ON}`: real tested-on environment text.
 
-## Pre-submit validation
+## Pre-submit Validation
 
 Before commit and push:
 
-1. run `scripts/operator_static_gate.py` exactly as instructed by the prompt template;
-2. run formatting checks on only the target files;
-3. run the gen-branch accuracy test;
-4. run the gen-branch `--level core` benchmark;
-5. re-check that the staged file list is target-only.
+1. Run the static gate exactly as instructed by the prompt template.
+2. Run formatting checks on only the target files.
+3. Run the generated-branch accuracy test.
+4. Run the generated-branch `--level core` benchmark.
+5. Re-check that the staged file list is target-only.
 
-The final validation subagent manually verifies semantic blockers not covered by the static script:
+Manually verify semantic blockers not covered by the static gate:
 
 - no torch fallback for target computation;
 - exported functions have test and benchmark coverage;
-- benchmark compares equivalent torch/gems work;
+- benchmark compares equivalent torch and FlagGems work;
 - benchmark has nonzero cases and real speedup data;
 - PR body uses only real test, benchmark, and tested-on data.
 
-Do not create a PR if the static gate fails, performance data is missing, benchmark has zero cases, tests failed, or required PR body sections are incomplete.
-
-## Git
+## Git and PR
 
 Stage target files explicitly by path. Do not stage the whole repository.
 
-Commit message format: `[KernelGen][Nvidia] Add <op> operator with Triton kernel`.
+Commit message format:
 
-The commit message must not contain co-author trailers.
+```text
+[KernelGen][Nvidia] Add <op> operator with Triton kernel
+```
 
-Push the current generated branch, normally `gen-<op>`, to the inferred or user-provided fork remote.
+Push the current generated branch to `{FORK_REMOTE}` and create the initial PR against `{UPSTREAM_REPO}:{BASE_BRANCH}`.
 
-## PR body
+The PR body is English and includes summary, testing or correctness, performance, tested-on, multi-backend testing, and files changed.
 
-Create the PR from the generated branch against `{UPSTREAM_REPO}:{BASE_BRANCH}`. The PR body is English and includes:
+## Hard Constraints
 
-- Summary or Description;
-- Testing / Correctness with commands;
-- Performance with dtype/case/speedup table;
-- Tested-on;
-- Multi-backend Testing, using real data or `N/A`;
-- Files Changed.
+Before staging, run:
 
-## Embedded final soft rules
+```bash
+python "{SKILL_ROOT}/scripts/general/operator_static_gate.py" --op "{OP}" --op-id "{OP_ID}" --module "{MODULE}" --base-ref "{UPSTREAM_REF}"
+```
 
-No entries yet. Add future final, staging, PR-body, or review-response soft rules here using the SOFT-YYYYMMDD-short-slug format from `references/soft-constraints.md`.
-
-## Return format
+## Return Format
 
 Return the PR URL, exact validation commands, target files staged, commit hash, benchmark summary, and any blocking issue.
