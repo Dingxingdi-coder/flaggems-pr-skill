@@ -13,6 +13,16 @@ Hard constraints are mechanically checkable rules. Runtime scripts under `script
 
 Soft constraints require semantic judgment about code, reviewer intent, test behavior, benchmark meaning, registration consistency, or PR truthfulness. They live in `references/general/soft-constraints.md` and in each stage's `soft-constraints.md`.
 
+## Checklist
+
+## Checklist
+
+You MUST create a task for each of these items and complete them in order:
+
+- [ ] **Step 0: Gather Context** — determine available GPU slots, collect raw operator names and norm Excel path, infer repository and worktree roots, and identify upstream and base branch. Stop if any context is missing.
+- [ ] **Step 1: Resolve Operator Context** — for each raw operator, run the context resolver; if it fails, stop that operator and report the error.
+- [ ] **Step 2: Dispatch Subagents in Order** — dispatch the subagents; block on failure.
+
 ## Workflow
 
 ### Get the Context
