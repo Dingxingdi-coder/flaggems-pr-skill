@@ -2,7 +2,7 @@
 
 You must create a task for each of these items and check them in order:
 
-- Keep one PR scoped to one aten operator family and do not include unrelated operator logic.
+- Keep one PR scoped to one ATen or fused operator family and do not include unrelated operator logic.
 - Keep all subagent edits inside the resolved generated worktree.
 - Use the existing generated branch as the PR branch and do not create `pr/<op>`.
 - Do not replace target computation with a PyTorch fallback.
