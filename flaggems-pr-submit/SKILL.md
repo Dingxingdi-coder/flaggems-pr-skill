@@ -22,7 +22,7 @@ Soft constraints require semantic judgment about code, reviewer intent, test beh
 - The user provides the path to `规范名.xlsx` as `{norm_xlsx}`.
 - `<repo_root>` is the cwd, `<worktree_root>` is `<repo_root>/.worktrees/`.
 -  Use `git remote -v` to get `{upstream}`. `{base_branch}` is the `main` branch of `{upstream}`.
-- `{skill_root}` is `~/.codex/skills/flaggems-pr-submit/`.
+- `{skill_root}` is the root of the skill.
 
 If there is any context you don't get, stop and ask the user for it. Do not guess or assume.
 

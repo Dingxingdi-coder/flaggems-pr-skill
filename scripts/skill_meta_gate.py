@@ -17,7 +17,7 @@ class Rule:
 
 
 RULES = [
-    Rule("META-H001", "all subagent prompt templates, specs, and soft-constraints files exist"),
+    Rule("META-H001", "all subagent prompt templates and soft-constraints files exist"),
     Rule("META-H002", "general soft constraints exist"),
     Rule("META-H003", "retired central, shared, and reviewer-intake files are absent"),
     Rule("META-H004", "the formal skill directory does not contain README files"),
@@ -51,6 +51,10 @@ RETIRED_PATHS = [
     path_text("flaggems-pr-submit", "references", "shared"),
     path_text("flaggems-pr-submit", "references", "name-worktree"),
     path_text("flaggems-pr-submit", "references", "prompt-templates", "name-worktree.md"),
+    path_text("flaggems-pr-submit", "references", "implementation-review", "spec.md"),
+    path_text("flaggems-pr-submit", "references", "worktree-test-benchmark", "spec.md"),
+    path_text("flaggems-pr-submit", "references", "register", "spec.md"),
+    path_text("flaggems-pr-submit", "references", "final-validation", "spec.md"),
 ]
 
 RETIRED_REFERENCES = [
@@ -62,6 +66,14 @@ RETIRED_REFERENCES = [
     path_text("references", "shared", "test-benchmark.md"),
     path_text("references", "name-worktree") + "/",
     path_text("references", "prompt-templates", "name-worktree.md"),
+    path_text("references", "implementation-review", "spec.md"),
+    path_text("references", "worktree-test-benchmark", "spec.md"),
+    path_text("references", "register", "spec.md"),
+    path_text("references", "final-validation", "spec.md"),
+    "{SKILL_ROOT}/" + path_text("references", "implementation-review", "spec.md"),
+    "{SKILL_ROOT}/" + path_text("references", "worktree-test-benchmark", "spec.md"),
+    "{SKILL_ROOT}/" + path_text("references", "register", "spec.md"),
+    "{SKILL_ROOT}/" + path_text("references", "final-validation", "spec.md"),
     path_text("flaggems-pr-submit", "scripts", "collect_kernelgen_review_delta.py"),
     path_text("flaggems-pr-submit", "scripts", "skill_meta_gate.py"),
     "{SKILL_ROOT}/" + path_text("scripts", "operator_static_gate.py"),
@@ -107,7 +119,6 @@ def check_required_files(root: Path, errors: list[Error]) -> None:
     for stage in STAGES:
         required = [
             f"flaggems-pr-submit/references/prompt-templates/{stage}.md",
-            f"flaggems-pr-submit/references/{stage}/spec.md",
             f"flaggems-pr-submit/references/{stage}/soft-constraints.md",
         ]
         for rel in required:
@@ -163,7 +174,6 @@ def check_prompt_templates(root: Path, errors: list[Error]) -> None:
         text = read_text(path)
         required = [
             general,
-            f"{{SKILL_ROOT}}/references/{stage}/spec.md",
             f"{{SKILL_ROOT}}/references/{stage}/soft-constraints.md",
         ]
         for item in required:

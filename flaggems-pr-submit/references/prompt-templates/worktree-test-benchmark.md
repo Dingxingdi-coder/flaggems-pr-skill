@@ -11,7 +11,6 @@ Working directory: `{GEN_WORKTREE}` only.
 Read these files before acting:
 
 - `{SKILL_ROOT}/references/general/soft-constraints.md`
-- `{SKILL_ROOT}/references/worktree-test-benchmark/spec.md`
 - `{SKILL_ROOT}/references/worktree-test-benchmark/soft-constraints.md`
 
 Run the target operator accuracy test and target operator `--level core` benchmark using GPU `{GPU}`. Do not edit files unless a minimal local repair is necessary to run the intended target test or benchmark, and report any such repair.

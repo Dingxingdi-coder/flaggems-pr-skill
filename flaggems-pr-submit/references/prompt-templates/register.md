@@ -11,7 +11,6 @@ Working directory: `{GEN_WORKTREE}` only.
 Read these files before acting:
 
 - `{SKILL_ROOT}/references/general/soft-constraints.md`
-- `{SKILL_ROOT}/references/register/spec.md`
 - `{SKILL_ROOT}/references/register/soft-constraints.md`
 - `{SKILL_ROOT}/scripts/general/operator_static_gate.py`
 
