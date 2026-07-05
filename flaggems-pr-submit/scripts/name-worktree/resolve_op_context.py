@@ -72,10 +72,15 @@ def resolve_norm_name(raw_op: str, norm_xlsx: Path) -> str:
     fail(f"no norm-name match for {raw_op}")
 
 
+def is_dunder_operator(op: str) -> bool:
+    return op.startswith("__") and op.endswith("__")
+
+
 def resolve_module_and_id(op: str) -> tuple[str, str]:
     if op in SPECIAL_OPS:
         return SPECIAL_OPS[op]
-    return op, op.lstrip("_")
+    module = op.rstrip("_") if op.endswith("_") and not is_dunder_operator(op) else op
+    return module, op.lstrip("_")
 
 
 def resolve_worktree(worktree_root: Path, op: str, op_id: str) -> Path:
@@ -123,6 +128,7 @@ def upstream_has_yaml_id(worktree: Path, base_ref: str, op_id: str) -> bool:
             return True
     return False
 
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--raw-op", required=True)
@@ -142,7 +148,7 @@ def main() -> None:
     base_ref = fetch_upstream(worktree, args.upstream, args.base_branch)
 
     kernel_path = f"src/flag_gems/ops/{module}.py"
-    if upstream_has_path(worktree, base_ref, kernel_path):
+    if upstream_has_path(worktree, base_ref, kernel_path) and not (op.endswith("_") and not is_dunder_operator(op)):
         fail(f"upstream already has {kernel_path}")
     if upstream_has_yaml_id(worktree, base_ref, op_id):
         fail(f"upstream already has yaml id {op_id}")
