@@ -27,7 +27,7 @@ No [KernelGen][Nvidia] PRs updated after <since>.
 Copy this prompt for the cloud agent, then paste the JSON output from `scripts/collect_kernelgen_review_delta.py`.
 
 ```text
-You are maintaining the local skill repository for `flaggems-pr-submit`.
+You are maintaining the skill repository for `flaggems-pr-submit`.
 
 Do not use the `flaggems-pr-submit` skill. This is skill maintenance, not a FlagGems PR submission.
 
@@ -56,18 +56,7 @@ Write or modify hard constraints only in the owning runtime script under `flagge
 
 Do not modify this README during daily maintenance unless the maintenance workflow itself changes.
 
-When finished, run:
+When finished, run `python scripts/skill_meta_gate.py`.
 
-- `python scripts/skill_meta_gate.py`
-- any real runtime command needed to exercise a modified hard-constraint script when the required worktree context is available
-
-Return a concise summary of the constraints changed and validation commands run.
-```
-
-## Structure Gate
-
-Run the maintenance gate after structural changes:
-
-```bash
-python scripts/skill_meta_gate.py
+Return a concise summary of the constraints changed.
 ```
