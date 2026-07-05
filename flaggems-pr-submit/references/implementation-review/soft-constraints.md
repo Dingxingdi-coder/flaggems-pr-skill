@@ -1,5 +1,7 @@
 # Implementation Review Soft Constraints
 
+You must create a task for each of these items and check them in order:
+
 - Preserve target operator behavior while adapting generated code to the current FlagGems project style.
 - Review duplicate or dead generated functions and remove only code that is unrelated to the target operator or provably unused.
 - Ensure wrapper dtype guards and unsupported dtype behavior match the implemented kernel and tests.

@@ -1,5 +1,7 @@
 # Final Validation Soft Constraints
 
+You must create a task for each of these items and check them in order:
+
 - Stage target files explicitly by path and never stage the whole repository.
 - Re-check that the staged file list is target-only before committing.
 - Commit messages must use `[KernelGen][Nvidia] Add <op> operator with Triton kernel` and must not contain co-author trailers.

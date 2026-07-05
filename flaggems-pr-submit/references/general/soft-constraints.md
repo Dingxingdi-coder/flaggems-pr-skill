@@ -1,6 +1,6 @@
 # General Soft Constraints
 
-These soft constraints apply across multiple subagent stages and require semantic judgment.
+You must create a task for each of these items and check them in order:
 
 - Keep one PR scoped to one aten operator family and do not include unrelated operator logic.
 - Keep all subagent edits inside the resolved generated worktree.

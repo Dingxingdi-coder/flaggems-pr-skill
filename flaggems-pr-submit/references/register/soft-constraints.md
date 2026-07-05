@@ -1,5 +1,7 @@
 # Register Soft Constraints
 
+You must create a task for each of these items and check them in order:
+
 - Append to related existing test or benchmark files only when preserving existing functions and adding target operator coverage.
 - Kernel files must keep the KernelGen header and export only target wrappers.
 - Exported wrappers must be registered, tested, and benchmarked consistently.
