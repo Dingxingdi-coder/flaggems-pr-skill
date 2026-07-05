@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -25,7 +24,7 @@ RULES = [
     Rule("META-H005", "maintenance scripts are not inside flaggems-pr-submit/scripts"),
     Rule("META-H006", "prompt templates require general and own stage reference files"),
     Rule("META-H007", "policy files do not reference retired paths or old script paths"),
-    Rule("META-H008", "runtime hard-rule scripts expose stable rule ids"),
+    Rule("META-H008", "runtime hard-rule scripts are importable and do not expose rule-id metadata"),
     Rule("META-H009", "GitHub Actions reviewer delta workflows are absent"),
 ]
 
@@ -77,8 +76,8 @@ MAINTENANCE_SCRIPT_NAMES = {
 }
 
 RUNTIME_HARD_SCRIPTS = [
-    ("flaggems-pr-submit/scripts/name-worktree/resolve_op_context.py", r"RESOLVE-H\d{3}"),
-    ("flaggems-pr-submit/scripts/general/operator_static_gate.py", r"STATIC-H\d{3}"),
+    "flaggems-pr-submit/scripts/name-worktree/resolve_op_context.py",
+    "flaggems-pr-submit/scripts/general/operator_static_gate.py",
 ]
 
 
@@ -194,26 +193,19 @@ def check_retired_references(root: Path, errors: list[Error]) -> None:
 
 
 def check_runtime_hard_scripts(root: Path, errors: list[Error]) -> None:
-    seen: set[str] = set()
-    for rel, rule_pattern in RUNTIME_HARD_SCRIPTS:
+    for rel in RUNTIME_HARD_SCRIPTS:
         path = root / rel
         if not path.is_file():
             errors.append(("META-H008", f"missing runtime hard-rule script: {rel}"))
             continue
-        proc = subprocess.run([sys.executable, str(path), "--list-rules"], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        text = read_text(path)
+        forbidden = ["--list-rules", "rule_id", "RESOLVE-H", "STATIC-H"]
+        for item in forbidden:
+            if item in text:
+                errors.append(("META-H008", f"{rel} contains retired hard-rule metadata: {item}"))
+        proc = subprocess.run([sys.executable, "-m", "py_compile", str(path)], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if proc.returncode != 0:
-            errors.append(("META-H008", f"{rel} --list-rules failed: {proc.stderr.strip()}"))
-            continue
-        for line in proc.stdout.splitlines():
-            if not line.strip():
-                continue
-            parts = line.split("\t", 1)
-            if len(parts) != 2 or not re.fullmatch(rule_pattern, parts[0]) or not parts[1].strip():
-                errors.append(("META-H008", f"{rel} emitted malformed rule line: {line!r}"))
-                continue
-            if parts[0] in seen:
-                errors.append(("META-H008", f"duplicate hard-rule id: {parts[0]}"))
-            seen.add(parts[0])
+            errors.append(("META-H008", f"{rel} failed py_compile: {proc.stderr.strip()}"))
 
 
 def main() -> None:

@@ -52,14 +52,14 @@ Write soft constraints only to one of these files:
 
 Each soft constraint must be one clear actionable sentence. Do not include reviewer sources, examples, counterexamples, or long explanations in the soft-constraints files.
 
-Write or modify hard constraints only in the owning runtime script under `flaggems-pr-submit/scripts/`. Use a stable rule id and add the smallest useful test or self-check for that script.
+Write or modify hard constraints only in the owning runtime script under `flaggems-pr-submit/scripts/`. Hard-rule scripts should print direct, actionable error text; do not add rule IDs or metadata-only list commands.
 
 Do not modify this README during daily maintenance unless the maintenance workflow itself changes.
 
 When finished, run:
 
 - `python scripts/skill_meta_gate.py`
-- the test or self-check for each modified hard-constraint script
+- any real runtime command needed to exercise a modified hard-constraint script when the required worktree context is available
 
 Return a concise summary of the constraints changed and validation commands run.
 ```

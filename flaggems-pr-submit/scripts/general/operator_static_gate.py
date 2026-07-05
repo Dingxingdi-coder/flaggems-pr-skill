@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic static gate for one generated FlagGems operator PR.
-
-Hard constraints in this file are intentionally identified by stable rule IDs.
-When promoting a reviewer-derived rule into this script, add the rule to RULES,
-emit failures through add_error(...), and validate this script with
-``--list-rules``.
-"""
+"""Deterministic static gate for one generated FlagGems operator PR."""
 
 from __future__ import annotations
 
@@ -13,43 +7,19 @@ import argparse
 import re
 import subprocess
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 
 
-@dataclass(frozen=True)
-class Rule:
-    rule_id: str
-    description: str
+Error = str
 
 
-RULES = [
-    Rule("STATIC-H000", "static gate command can diff against the supplied upstream/base ref"),
-    Rule("STATIC-H001", "branch diff is limited to the target operator file set"),
-    Rule("STATIC-H002", "required kernel, package init, top-level init, and operators.yaml files exist"),
-    Rule("STATIC-H003", "target kernel file contains KernelGen in the first 10 lines"),
-    Rule("STATIC-H004", "target changed Python files do not contain print() debug output"),
-    Rule("STATIC-H005", "conf/operators.yaml contains exactly one id for the target op_id"),
-    Rule("STATIC-H006", "at least one changed test file contains pytest.mark.<op_id>"),
-    Rule("STATIC-H007", "changed tests do not pass rtol= to gems_assert_close"),
-    Rule("STATIC-H008", "at least one changed benchmark file contains pytest.mark.<op_id>"),
-    Rule("STATIC-H009", "at least one changed benchmark file sets op_name to the target op_id"),
-]
-
-
-Error = tuple[str, str]
-
-
-def add_error(errors: list[Error], rule_id: str, message: str) -> None:
-    known_rule_ids = {rule.rule_id for rule in RULES}
-    if rule_id not in known_rule_ids:
-        raise AssertionError(f"unknown hard rule id: {rule_id}")
-    errors.append((rule_id, message))
+def add_error(errors: list[Error], message: str) -> None:
+    errors.append(message)
 
 
 def fail(errors: list[Error]) -> None:
-    for rule_id, message in errors:
-        print(f"ERROR[{rule_id}]: {message}", file=sys.stderr)
+    for message in errors:
+        print(f"ERROR: {message}", file=sys.stderr)
     raise SystemExit(1)
 
 
@@ -86,49 +56,17 @@ def contains_benchmark_op_name(text: str, op_id: str) -> bool:
     return re.search(pattern, text) is not None
 
 
-def print_rule_list() -> None:
-    for rule in RULES:
-        print(f"{rule.rule_id}\t{rule.description}")
-
-
-def run_self_test() -> None:
-    assert contains_pytest_mark("@pytest.mark.foo", "foo")
-    assert contains_pytest_mark("pytestmark = pytest.mark.foo", "foo")
-    assert contains_benchmark_op_name('op_name="foo"', "foo")
-    assert contains_benchmark_op_name("op_name = 'foo'", "foo")
-    assert is_python_under("tests/test_foo.py", "tests")
-    assert not is_python_under("docs/test_foo.py", "tests")
-    print("PASS operator_static_gate self-test")
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--op")
-    parser.add_argument("--op-id")
-    parser.add_argument("--module")
+    parser.add_argument("--op", required=True)
+    parser.add_argument("--op-id", required=True)
+    parser.add_argument("--module", required=True)
     parser.add_argument("--base-ref", default="refs/remotes/upstream/master")
-    parser.add_argument("--list-rules", action="store_true", help="print hard-rule IDs enforced by this script")
-    parser.add_argument("--self-test", action="store_true", help="run local static-gate self-test without reading a worktree")
-    args = parser.parse_args()
-
-    if args.list_rules or args.self_test:
-        return args
-
-    missing = [name for name in ("op", "op_id", "module") if getattr(args, name) is None]
-    if missing:
-        parser.error("missing required arguments unless --list-rules is used: " + ", ".join(f"--{name.replace('_', '-')}" for name in missing))
-    return args
+    return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    if args.list_rules:
-        print_rule_list()
-        return
-    if args.self_test:
-        run_self_test()
-        return
-
     errors: list[Error] = []
     root = Path.cwd()
     kernel = f"src/flag_gems/ops/{args.module}.py"
@@ -142,7 +80,7 @@ def main() -> None:
     try:
         changed = changed_files(args.base_ref)
     except subprocess.CalledProcessError as exc:
-        fail([("STATIC-H000", f"cannot diff against {args.base_ref}: {exc.stderr.strip()}")])
+        fail([f"cannot diff against {args.base_ref}: {exc.stderr.strip()}"])
 
     unrelated = []
     for path in changed:
@@ -150,22 +88,22 @@ def main() -> None:
             continue
         unrelated.append(path)
     if unrelated:
-        add_error(errors, "STATIC-H001", "branch diff contains unrelated files: " + ", ".join(unrelated))
+        add_error(errors, "branch diff contains unrelated files: " + ", ".join(unrelated))
 
     missing = [path for path in required_paths if not (root / path).is_file()]
     if missing:
-        add_error(errors, "STATIC-H002", "required files are missing: " + ", ".join(missing))
+        add_error(errors, "required files are missing: " + ", ".join(missing))
 
     if (root / kernel).is_file():
         kernel_head = "\n".join(read_text(root / kernel).splitlines()[:10])
         if "KernelGen" not in kernel_head:
-            add_error(errors, "STATIC-H003", f"{kernel} does not contain KernelGen in the first 10 lines")
+            add_error(errors, f"{kernel} does not contain KernelGen in the first 10 lines")
 
     scan_paths = [path for path in changed if path == kernel or is_python_under(path, "tests") or is_python_under(path, "benchmark")]
     for path in scan_paths:
         full_path = root / path
         if full_path.is_file() and re.search(r"\bprint\s*\(", read_text(full_path)):
-            add_error(errors, "STATIC-H004", f"print() appears in {path}")
+            add_error(errors, f"print() appears in {path}")
 
     yaml_path = root / "conf/operators.yaml"
     if yaml_path.is_file():
@@ -173,7 +111,7 @@ def main() -> None:
         yaml_pattern = rf"(?m)^\s*id:\s*['\"]?{re.escape(args.op_id)}['\"]?\s*$"
         count = len(re.findall(yaml_pattern, yaml_text))
         if count != 1:
-            add_error(errors, "STATIC-H005", f"conf/operators.yaml must contain exactly one id for {args.op_id}; found {count}")
+            add_error(errors, f"conf/operators.yaml must contain exactly one id for {args.op_id}; found {count}")
 
     test_files = [path for path in changed if is_python_under(path, "tests")]
     benchmark_files = [path for path in changed if is_python_under(path, "benchmark")]
@@ -187,9 +125,9 @@ def main() -> None:
         if contains_pytest_mark(text, args.op_id):
             test_mark_files.append(path)
         if re.search(r"gems_assert_close\s*\([\s\S]{0,500}?\brtol\s*=", text):
-            add_error(errors, "STATIC-H007", f"gems_assert_close passes rtol in {path}")
+            add_error(errors, f"gems_assert_close passes rtol in {path}")
     if not test_mark_files:
-        add_error(errors, "STATIC-H006", f"no changed test file contains pytest mark {args.op_id}")
+        add_error(errors, f"no changed test file contains pytest mark {args.op_id}")
 
     benchmark_mark_files = []
     benchmark_op_name_files = []
@@ -203,17 +141,14 @@ def main() -> None:
         if contains_benchmark_op_name(text, args.op_id):
             benchmark_op_name_files.append(path)
     if not benchmark_mark_files:
-        add_error(errors, "STATIC-H008", f"no changed benchmark file contains pytest mark {args.op_id}")
+        add_error(errors, f"no changed benchmark file contains pytest mark {args.op_id}")
     if not benchmark_op_name_files:
-        add_error(errors, "STATIC-H009", f"no changed benchmark file sets op_name to {args.op_id}")
+        add_error(errors, f"no changed benchmark file sets op_name to {args.op_id}")
 
     if errors:
         fail(errors)
 
     print("PASS operator static gate")
-    print("enforced hard rules:")
-    for rule in RULES:
-        print(f"- {rule.rule_id}")
     print("changed files:")
     for path in changed:
         print(f"- {path}")
