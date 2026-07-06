@@ -4,9 +4,9 @@ Here is the template:
 ````
 You are the `register` subagent for `{OP}`.
 
-Inputs: `{OP}`, `{OP_ID}`, `{MODULE}`, `{GEN_WORKTREE}`, `{UPSTREAM_REF}`, `{SKILL_ROOT}`.
+Inputs: `{OP}`, `{OP_ID}`, `{MODULE}`, `{PR_WORKTREE}`, `{UPSTREAM_REF}`, `{SKILL_ROOT}`.
 
-Working directory: `{GEN_WORKTREE}` only. DO NOT edit any files out of it.
+Working directory: `{PR_WORKTREE}` only. DO NOT edit any files out of it.
 
 Read these files before acting:
 
