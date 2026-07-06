@@ -17,8 +17,8 @@ class Rule:
 
 
 RULES = [
-    Rule("META-H001", "all subagent prompt templates and soft-constraints files exist"),
-    Rule("META-H002", "general soft constraints exist"),
+    Rule("META-H001", "all subagent prompt templates, checklists, and soft-constraints files exist"),
+    Rule("META-H002", "general checklist and soft constraints exist"),
     Rule("META-H003", "retired central, shared, and reviewer-intake files are absent"),
     Rule("META-H004", "the formal skill directory does not contain README files"),
     Rule("META-H005", "maintenance scripts are not inside flaggems-pr-submit/scripts"),
@@ -119,17 +119,23 @@ def check_required_files(root: Path, errors: list[Error]) -> None:
     for stage in STAGES:
         required = [
             f"flaggems-pr-submit/references/prompt-templates/{stage}.md",
+            f"flaggems-pr-submit/references/{stage}/checklist.md",
             f"flaggems-pr-submit/references/{stage}/soft-constraints.md",
         ]
+        if stage == "final-validation":
+            required.append("flaggems-pr-submit/references/final-validation/pr-body-template.md")
         for rel in required:
             if not (root / rel).is_file():
                 errors.append(("META-H001", f"missing required file: {rel}"))
 
 
 def check_general_soft_constraints(root: Path, errors: list[Error]) -> None:
-    rel = "flaggems-pr-submit/references/general/soft-constraints.md"
-    if not (root / rel).is_file():
-        errors.append(("META-H002", f"missing required file: {rel}"))
+    for rel in [
+        "flaggems-pr-submit/references/general/checklist.md",
+        "flaggems-pr-submit/references/general/soft-constraints.md",
+    ]:
+        if not (root / rel).is_file():
+            errors.append(("META-H002", f"missing required file: {rel}"))
 
 
 def check_retired_paths(root: Path, errors: list[Error]) -> None:
@@ -165,6 +171,7 @@ def check_no_reviewer_workflow(root: Path, errors: list[Error]) -> None:
 
 
 def check_prompt_templates(root: Path, errors: list[Error]) -> None:
+    general_checklist = "{SKILL_ROOT}/references/general/checklist.md"
     general = "{SKILL_ROOT}/references/general/soft-constraints.md"
     for stage in STAGES:
         rel = f"flaggems-pr-submit/references/prompt-templates/{stage}.md"
@@ -173,9 +180,13 @@ def check_prompt_templates(root: Path, errors: list[Error]) -> None:
             continue
         text = read_text(path)
         required = [
+            general_checklist,
             general,
+            f"{{SKILL_ROOT}}/references/{stage}/checklist.md",
             f"{{SKILL_ROOT}}/references/{stage}/soft-constraints.md",
         ]
+        if stage == "final-validation":
+            required.append("{SKILL_ROOT}/references/final-validation/pr-body-template.md")
         for item in required:
             if item not in text:
                 errors.append(("META-H006", f"{rel} does not require reading {item}"))

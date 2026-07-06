@@ -10,7 +10,9 @@ You are the main agent. Your role is orchestration only: infer shared context, r
 
 Hard constraints are mechanically checkable rules. Runtime scripts under `scripts/` are the source of truth. Subagents must run the relevant scripts instead of reimplementing equivalent checks in prose.
 
-Soft constraints require semantic judgment about code, reviewer intent, test behavior, benchmark meaning, registration consistency, or PR truthfulness. They live in `references/general/soft-constraints.md` and in each stage's `soft-constraints.md`.
+Checklists are ordered environment, code, validation-data, and registration consistency checks that subagents must complete before acting. They live in `references/general/checklist.md` and in each stage's `checklist.md`.
+
+Soft constraints require semantic judgment about code, reviewer intent, test behavior, benchmark meaning, registration consistency, or PR truthfulness while a subagent acts. They live in `references/general/soft-constraints.md` and in each stage's `soft-constraints.md`.
 
 ## Subagents Principles
 
@@ -87,5 +89,3 @@ After the PR worktree is prepared, dispatch subagents through these stages in th
 * `final-validation` (prompt in `references/prompt-templates/final-validation.md`)
 
 Do not dispatch `register` or `final-validation` against `{GEN_WORKTREE}`. They must use `{PR_WORKTREE}`.
-
-Before dispatching `final-validation`, you must include the real validation dataset collected from earlier stages: accuracy command and result, benchmark command and result, parsed per-case benchmark table, mean speedup, dtype coverage, tested-on text, and multi-backend status.

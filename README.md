@@ -40,9 +40,22 @@ Only preserve constraints that generalize to future `[KernelGen][Nvidia]` PRs. I
 Classify before editing:
 
 - hard vs soft;
+- checklist vs soft when the rule belongs in a subagent reference;
 - general vs a specific subagent stage.
 
 A hard constraint must be stable, low false-positive and low false-negative, and mechanically checkable by a local script. Otherwise prefer a soft constraint.
+
+Write checklist items for environment, code, validation-data, or registration consistency checks that a subagent must complete before acting.
+
+Write soft constraints for behavioral limits a subagent must follow while acting.
+
+Write checklist items only to one of these files:
+
+- `flaggems-pr-submit/references/general/checklist.md`
+- `flaggems-pr-submit/references/implementation-review/checklist.md`
+- `flaggems-pr-submit/references/worktree-test-benchmark/checklist.md`
+- `flaggems-pr-submit/references/register/checklist.md`
+- `flaggems-pr-submit/references/final-validation/checklist.md`
 
 Write soft constraints only to one of these files:
 
