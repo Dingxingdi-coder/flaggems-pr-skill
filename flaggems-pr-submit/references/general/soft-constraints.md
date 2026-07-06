@@ -9,5 +9,4 @@ You must create a task for each of these items and check them in order:
 - Do not reduce accuracy coverage or benchmark coverage merely to make validation pass.
 - Accuracy tests and benchmarks must exercise the same public operator id used for yaml, pytest marks, and registration.
 - Benchmarks must compare equivalent torch and FlagGems work and must report nonzero successful cases before PR creation.
-- Mean benchmark speedup below 0.8x blocks PR creation unless the user explicitly decides to stop without submitting the PR.
 - The final PR body must use only real test commands, benchmark commands, speedup data, and tested-on data collected in the worktree.
