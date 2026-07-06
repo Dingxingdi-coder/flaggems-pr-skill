@@ -11,3 +11,4 @@
 - When a target operator is an alias or overload of an existing FlagGems implementation, register and cover the existing implementation instead of adding duplicate wrappers, kernels, tests, or benchmarks.
 - Place non-ATen fused or custom operators under `src/flag_gems/fused` and keep ATen overrides under `src/flag_gems/ops`.
 - Populate `conf/operators.yaml` labels, kind, stages, and `for` entries from the current upstream taxonomy for the actual public Torch or fused operator.
+- Use lower snake-case public operator ids for generated fused or custom operators unless the upstream taxonomy requires a different spelling.
