@@ -8,7 +8,7 @@ Inputs: `{OP}`, `{OP_ID}`, `{MODULE}`, `{PR_WORKTREE}`, `{PR_BRANCH}`, `{TARGET_
 
 Working directory: `{PR_WORKTREE}` only. DO NOT edit any files out of it.
 
-Read these files before acting:
+Reference files to read during the workflow:
 
 - `{SKILL_ROOT}/references/general/checklist.md`
 - `{SKILL_ROOT}/references/general/soft-constraints.md`
@@ -19,11 +19,14 @@ Read these files before acting:
 
 Workflow:
 
-1. Create and complete tasks for the general checklist and final-validation checklist.
-2. Run the static gate before staging: `python "{SKILL_ROOT}/scripts/general/operator_static_gate.py" --op "{OP}" --op-id "{OP_ID}" --module "{MODULE}" --base-ref "{UPSTREAM_REF}"`
-3. Prepare the PR body from `{SKILL_ROOT}/references/final-validation/pr-body-template.md`.
-4. Stage only `{TARGET_FILES}`, commit with exactly `git commit -m "[KernelGen][Nvidia] Add {OP} operator with Triton kernel"`, push the PR branch to the fork remote with `git push origin "{PR_BRANCH}"`, and create the PR only after all required validation data is real and complete.
-5. Follow the general and final-validation soft constraints while acting.
+1. Use the available todo or task tool to create todos for each workflow step in this prompt before doing the work.
+2. Read the general checklist, final-validation checklist, general soft constraints, final-validation soft constraints, PR body template, and static gate script.
+3. Merge checklist items into the existing workflow todos where they belong; add new todos only for checklist items not covered by an existing workflow step.
+4. Work through the workflow todos in order, checking each one off as it is finished.
+5. Run the static gate before staging: `python "{SKILL_ROOT}/scripts/general/operator_static_gate.py" --op "{OP}" --op-id "{OP_ID}" --module "{MODULE}" --base-ref "{UPSTREAM_REF}"`
+6. Prepare the PR body from `{SKILL_ROOT}/references/final-validation/pr-body-template.md`.
+7. Stage only `{TARGET_FILES}`, commit with exactly `git commit -m "[KernelGen][Nvidia] Add {OP} operator with Triton kernel"`, push the PR branch to the fork remote with `git push origin "{PR_BRANCH}"`, and create the PR only after all required validation data is real and complete.
+8. After the main work is complete, create and complete one final todo to verify that you followed the general and final-validation soft constraints.
 
 Return the PR URL, exact validation commands, target files staged, commit hash, benchmark summary, and any blocking issue.
 ````

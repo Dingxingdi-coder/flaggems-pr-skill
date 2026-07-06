@@ -1,6 +1,6 @@
 # Worktree Test Benchmark Checklist
 
-You must create a task for each item and check them in order:
+Use this checklist to enrich your workflow todos and verify the work:
 
 - Locate the target accuracy test by confirming it contains `pytest.mark.{OP_ID}`.
 - Locate the target benchmark by confirming it contains both `pytest.mark.{OP_ID}` and `op_name="{OP_ID}"`.

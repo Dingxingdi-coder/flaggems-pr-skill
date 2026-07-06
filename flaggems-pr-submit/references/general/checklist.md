@@ -1,6 +1,6 @@
 # General Checklist
 
-You must create a task for each item and check them in order:
+Use this checklist to enrich your workflow todos and verify the work:
 
 - Confirm the operator scope is one ATen or fused operator family and contains no unrelated operator logic.
 - Confirm implementation and validation edits stay inside the resolved generated worktree.

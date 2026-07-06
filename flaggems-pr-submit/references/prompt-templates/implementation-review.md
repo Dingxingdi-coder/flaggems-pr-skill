@@ -10,7 +10,7 @@ Inputs: `{OP}`, `{OP_ID}`, `{MODULE}`, `{GEN_WORKTREE}`, `{GPU}`, `{SKILL_ROOT}`
 
 Working directory: `{GEN_WORKTREE}` only. DO NOT edit any files out of it.
 
-Read these files before acting:
+Reference files to read during the workflow:
 
 - `{SKILL_ROOT}/references/general/checklist.md`
 - `{SKILL_ROOT}/references/general/soft-constraints.md`
@@ -19,9 +19,12 @@ Read these files before acting:
 
 Workflow:
 
-1. Create and complete tasks for the general checklist and implementation-review checklist.
-2. Review and repair implementation, tests, benchmark code, and registration-adjacent issues.
-3. Follow the general and implementation-review soft constraints while acting.
+1. Use the available todo or task tool to create todos for each workflow step in this prompt before doing the work.
+2. Read the general checklist, implementation-review checklist, general soft constraints, and implementation-review soft constraints.
+3. Merge checklist items into the existing workflow todos where they belong; add new todos only for checklist items not covered by an existing workflow step.
+4. Work through the workflow todos in order, checking each one off as it is finished.
+5. Review and repair implementation, tests, benchmark code, and registration-adjacent issues.
+6. After the main work is complete, create and complete one final todo to verify that you followed the general and implementation-review soft constraints.
 
 Return changed files, fixed issues, remaining risks, tests or benchmarks that should run next, and blocking issues.
 ````

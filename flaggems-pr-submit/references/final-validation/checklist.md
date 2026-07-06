@@ -1,6 +1,6 @@
 # Final Validation Checklist
 
-You must create a task for each item and check them in order:
+Use this checklist to enrich your workflow todos and verify the work:
 
 - Run the static gate before staging.
 - Confirm static gates pass, tests pass, benchmark cases are nonzero, and performance data is present.

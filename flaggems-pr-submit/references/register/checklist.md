@@ -1,6 +1,6 @@
 # Register Checklist
 
-You must create a task for each item and check them in order:
+Use this checklist to enrich your workflow todos and verify the work:
 
 - Locate related existing kernel, test, and benchmark files for the same operator family.
 - Check kernel files keep the KernelGen header and export only target wrappers.

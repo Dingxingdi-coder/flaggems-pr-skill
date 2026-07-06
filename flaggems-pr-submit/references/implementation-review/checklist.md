@@ -1,6 +1,6 @@
 # Implementation Review Checklist
 
-Create a task for each item and complete them in order:
+Use this checklist to enrich your workflow todos and verify the work:
 
 - Locate the target implementation, accuracy test, benchmark, and registration-adjacent files.
 - Check for duplicate or dead generated functions and identify only code that is unrelated to the target operator or provably unused.
