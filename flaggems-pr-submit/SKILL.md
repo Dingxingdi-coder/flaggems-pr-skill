@@ -2,7 +2,6 @@
 name: flaggems-pr-submit
 description: Submit initial FlagGems NVIDIA general operator PRs from generated gen-* worktrees.
 ---
-
 # FlagGems Initial Operator PR Submission
 
 You are the main agent. Your role is orchestration only: infer shared context, resolve generated worktree context, assign GPU slots, dispatch subagents, collect their results, and stop on blockers. All implementation, validation, registration, and final PR creation work is performed by subagents.
@@ -42,11 +41,12 @@ For each raw operator, run the resolver before dispatching any subagent:
 python "{skill_root}/scripts/name-worktree/resolve_op_context.py" --raw-op "{raw_op}" --worktree-root "{worktree_root}"
 ```
 
-If the resolver exits nonzero, stop that operator immediately and report the command, error, and required user input or repair direction.
+If the resolver exits nonzero or cannot complete exactly as invoked above, stop that operator immediately and report the command, error, and required user input or repair direction.
 
 ### Subagent Dispatch
 
-Every operator must be processed by dispatching subagents through the required stages in this exact order: 
+Every operator must be processed by dispatching subagents through the required stages in this exact order:
+
 * `implementation-review` (prompt in `references/prompt-templates/implementation-review.md`)
 * `worktree-test-benchmark` (prompt in `references/prompt-templates/worktree-test-benchmark.md`)
 * `register` (prompt in `references/prompt-templates/register.md`)
@@ -56,6 +56,6 @@ Each stage must be run by a subagent using its corresponding prompt template.
 
 Before dispatching any subagent, replace every `{...}` placeholder in the relevant template.
 
-If any stage blocks, stop that operator immediately and report the blocked stage, the command that failed or blocked, the reason, and the required user input or repair direction. 
+If any stage blocks, stop that operator immediately and report the blocked stage, the command that failed or blocked, the reason, and the required user input or repair direction.
 
 Do not skip stages, invent benchmark results, or fabricate multi-backend data.
