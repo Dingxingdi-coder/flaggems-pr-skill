@@ -36,42 +36,6 @@ def run_git(worktree: Path, *args: str, check: bool = True) -> subprocess.Comple
     )
 
 
-def resolve_norm_name(raw_op: str, norm_xlsx: Path) -> str:
-    try:
-        from openpyxl import load_workbook
-    except ImportError as exc:  # pragma: no cover - environment setup issue
-        raise SystemExit("openpyxl is required to read norm-name xlsx files") from exc
-
-    wb = load_workbook(norm_xlsx, read_only=True, data_only=True)
-    ws = wb.active
-    rows = ws.iter_rows(values_only=True)
-    try:
-        headers = ["" if value is None else str(value).strip() for value in next(rows)]
-    except StopIteration:
-        fail(f"empty norm-name spreadsheet: {norm_xlsx}")
-
-    try:
-        op_col = headers.index("算子名")
-    except ValueError:
-        fail("norm-name spreadsheet must contain a column named 算子名")
-
-    norm_cols = [index for index, header in enumerate(headers) if "规范命名" in header]
-    if not norm_cols:
-        fail("norm-name spreadsheet must contain a column whose header contains 规范命名")
-    norm_col = norm_cols[0]
-
-    target = strip_aten(raw_op)
-    for row in rows:
-        name = strip_aten(row[op_col] if op_col < len(row) else None)
-        if name == target:
-            normalized = "" if norm_col >= len(row) or row[norm_col] is None else str(row[norm_col]).strip()
-            if not normalized:
-                fail(f"normalized name is empty for {raw_op}")
-            return normalized
-
-    fail(f"no norm-name match for {raw_op}")
-
-
 def is_dunder_operator(op: str) -> bool:
     return op.startswith("__") and op.endswith("__")
 
@@ -83,22 +47,50 @@ def resolve_module_and_id(op: str) -> tuple[str, str]:
     return module, op.lstrip("_")
 
 
-def resolve_worktree(worktree_root: Path, op: str, op_id: str) -> Path:
-    candidates = [worktree_root / f"gen-{op}"]
-    public_id_candidate = worktree_root / f"gen-{op_id}"
-    if public_id_candidate not in candidates:
-        candidates.append(public_id_candidate)
+def expected_branches(op: str, op_id: str) -> set[str]:
+    return {f"gen-{op}", f"gen-{op_id}"}
 
-    existing = [candidate for candidate in candidates if candidate.is_dir()]
-    if not existing:
-        fail("generated worktree not found; tried " + ", ".join(str(path) for path in candidates))
-    return existing[0].resolve()
+
+def branch_for(worktree: Path) -> str | None:
+    result = run_git(worktree, "rev-parse", "--abbrev-ref", "HEAD", check=False)
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip()
+
+
+def resolve_worktree(worktree_root: Path, op: str, op_id: str) -> tuple[Path, str]:
+    expected = expected_branches(op, op_id)
+    candidates = [worktree_root / branch for branch in sorted(expected)]
+
+    matches: list[tuple[Path, str]] = []
+    for candidate in candidates:
+        if not candidate.is_dir():
+            continue
+        branch = branch_for(candidate)
+        if branch in expected:
+            matches.append((candidate.resolve(), branch))
+
+    if not matches and worktree_root.is_dir():
+        for candidate in sorted(worktree_root.glob("gen-*")):
+            if candidate in candidates or not candidate.is_dir():
+                continue
+            branch = branch_for(candidate)
+            if branch in expected:
+                matches.append((candidate.resolve(), branch))
+
+    if not matches:
+        tried = ", ".join(str(path) for path in candidates)
+        fail(f"generated worktree not found for {op}; tried {tried} and scanned {worktree_root}/gen-* branches")
+    if len(matches) > 1:
+        found = ", ".join(f"{path} ({branch})" for path, branch in matches)
+        fail(f"multiple generated worktrees matched {op}: {found}")
+    return matches[0]
 
 
 def check_branch(worktree: Path, op: str, op_id: str) -> str:
     result = run_git(worktree, "rev-parse", "--abbrev-ref", "HEAD")
     branch = result.stdout.strip()
-    expected = {f"gen-{op}", f"gen-{op_id}"}
+    expected = expected_branches(op, op_id)
     if branch not in expected:
         fail(f"worktree branch is {branch}, expected one of {sorted(expected)}")
     return branch
@@ -132,7 +124,6 @@ def upstream_has_yaml_id(worktree: Path, base_ref: str, op_id: str) -> bool:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--raw-op", required=True)
-    parser.add_argument("--norm-xlsx", type=Path, required=True)
     parser.add_argument("--worktree-root", type=Path, required=True)
     parser.add_argument("--upstream", default="upstream")
     parser.add_argument("--base-branch", default="main")
@@ -141,9 +132,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    op = resolve_norm_name(args.raw_op, args.norm_xlsx)
+    op = strip_aten(args.raw_op)
     module, op_id = resolve_module_and_id(op)
-    worktree = resolve_worktree(args.worktree_root, op, op_id)
+    worktree, _branch = resolve_worktree(args.worktree_root, op, op_id)
     branch = check_branch(worktree, op, op_id)
     base_ref = fetch_upstream(worktree, args.upstream, args.base_branch)
 

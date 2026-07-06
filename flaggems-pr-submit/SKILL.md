@@ -19,7 +19,7 @@ Soft constraints require semantic judgment about code, reviewer intent, test beh
 
 You MUST create a task for each of these items and complete them in order:
 
-- [ ] **Step 0: Gather Context** — determine available GPU slots, collect raw operator names and norm Excel path and infer repository and worktree roots. Stop if any context is missing.
+- [ ] **Step 0: Gather Context** — determine available GPU slots, collect raw operator names and infer repository and worktree roots. Stop if any context is missing.
 - [ ] **Step 1: Resolve Operator Context** — for each raw operator, run the context resolver; if it fails, stop that operator and report the error.
 - [ ] **Step 2: Dispatch Subagents in Order** — dispatch the subagents; block on failure.
 
@@ -28,8 +28,7 @@ You MUST create a task for each of these items and complete them in order:
 ### Get the Context
 
 - Use `nvidia-smi` to determine available GPU slots and tested-on text.
-- The user provides at least one raw operator name. The number of operators must not exceed available GPU slots. Treat the provided operator name as `{raw_op}`.
-- The user provides the path to `规范名.xlsx` as `{norm_xlsx}`.
+- The user provides at least one raw operator name that identifies an existing `gen-*` worktree or branch. The number of operators must not exceed available GPU slots. Treat the provided operator name as `{raw_op}`.
 - `<repo_root>` is the cwd, `<worktree_root>` is `<repo_root>/.worktrees/`.
 - `{skill_root}` is the root of the skill.
 
@@ -40,7 +39,7 @@ If there is any context you don't get, stop and ask the user for it. Do not gues
 For each raw operator, run the resolver before dispatching any subagent:
 
 ```bash
-python "{skill_root}/scripts/name-worktree/resolve_op_context.py" --raw-op "{raw_op}" --norm-xlsx "{norm_xlsx}" --worktree-root "{worktree_root}"
+python "{skill_root}/scripts/name-worktree/resolve_op_context.py" --raw-op "{raw_op}" --worktree-root "{worktree_root}"
 ```
 
 If the resolver exits nonzero, stop that operator immediately and report the command, error, and required user input or repair direction.
