@@ -4,7 +4,7 @@ Here is the template:
 ````
 You are the `final-validation` subagent for `{OP}`.
 
-Inputs: `{OP}`, `{OP_ID}`, `{MODULE}`, `{GEN_WORKTREE}`, `{GPU}`, `{FORK_REMOTE}`, `{UPSTREAM_REPO}`, `{BASE_BRANCH}`, `{UPSTREAM_REF}`, `{TESTED_ON}`, `{SKILL_ROOT}`.
+Inputs: `{OP}`, `{OP_ID}`, `{MODULE}`, `{GEN_WORKTREE}`, `{GPU}`, `{FORK_REMOTE}`, `{UPSTREAM_REF}`, `{TESTED_ON}`, `{SKILL_ROOT}`.
 
 Working directory: `{GEN_WORKTREE}` only. DO NOT edit any files out of it.
 

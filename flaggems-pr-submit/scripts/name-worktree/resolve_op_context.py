@@ -135,7 +135,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--norm-xlsx", type=Path, required=True)
     parser.add_argument("--worktree-root", type=Path, required=True)
     parser.add_argument("--upstream", default="upstream")
-    parser.add_argument("--base-branch", default="master")
+    parser.add_argument("--base-branch", default="main")
     return parser.parse_args()
 
 

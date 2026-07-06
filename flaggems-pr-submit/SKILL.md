@@ -19,7 +19,7 @@ Soft constraints require semantic judgment about code, reviewer intent, test beh
 
 You MUST create a task for each of these items and complete them in order:
 
-- [ ] **Step 0: Gather Context** — determine available GPU slots, collect raw operator names and norm Excel path, infer repository and worktree roots, and identify upstream and base branch. Stop if any context is missing.
+- [ ] **Step 0: Gather Context** — determine available GPU slots, collect raw operator names and norm Excel path and infer repository and worktree roots. Stop if any context is missing.
 - [ ] **Step 1: Resolve Operator Context** — for each raw operator, run the context resolver; if it fails, stop that operator and report the error.
 - [ ] **Step 2: Dispatch Subagents in Order** — dispatch the subagents; block on failure.
 
@@ -31,7 +31,6 @@ You MUST create a task for each of these items and complete them in order:
 - The user provides at least one raw operator name. The number of operators must not exceed available GPU slots. Treat the provided operator name as `{raw_op}`.
 - The user provides the path to `规范名.xlsx` as `{norm_xlsx}`.
 - `<repo_root>` is the cwd, `<worktree_root>` is `<repo_root>/.worktrees/`.
--  Use `git remote -v` to get `{upstream}`. `{base_branch}` is the `main` branch of `{upstream}`.
 - `{skill_root}` is the root of the skill.
 
 If there is any context you don't get, stop and ask the user for it. Do not guess or assume.
@@ -41,7 +40,7 @@ If there is any context you don't get, stop and ask the user for it. Do not gues
 For each raw operator, run the resolver before dispatching any subagent:
 
 ```bash
-python "{skill_root}/scripts/name-worktree/resolve_op_context.py" --raw-op "{raw_op}" --norm-xlsx "{norm_xlsx}" --worktree-root "{worktree_root}" --upstream "{upstream}" --base-branch "{base_branch}"
+python "{skill_root}/scripts/name-worktree/resolve_op_context.py" --raw-op "{raw_op}" --norm-xlsx "{norm_xlsx}" --worktree-root "{worktree_root}"
 ```
 
 If the resolver exits nonzero, stop that operator immediately and report the command, error, and required user input or repair direction.

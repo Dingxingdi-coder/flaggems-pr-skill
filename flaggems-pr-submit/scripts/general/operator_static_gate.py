@@ -111,7 +111,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--op", required=True)
     parser.add_argument("--op-id", required=True)
     parser.add_argument("--module", required=True)
-    parser.add_argument("--base-ref", default="refs/remotes/upstream/master")
+    parser.add_argument("--base-ref", default="refs/remotes/upstream/main")
     return parser.parse_args()
 
 
