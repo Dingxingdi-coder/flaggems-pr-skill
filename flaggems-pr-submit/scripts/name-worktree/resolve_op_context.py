@@ -126,7 +126,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--raw-op", required=True)
     parser.add_argument("--worktree-root", type=Path, required=True)
     parser.add_argument("--upstream", default="upstream")
-    parser.add_argument("--base-branch", default="main")
+    parser.add_argument("--base-branch", default="master")
     return parser.parse_args()
 
 
