@@ -4,7 +4,7 @@ description: Submit initial FlagGems NVIDIA general operator PRs from generated 
 ---
 # FlagGems Initial Operator PR Submission
 
-You are the main agent. Your role is orchestration only: infer shared context, resolve generated worktree context, assign GPU slots, dispatch subagents, run the deterministic PR-worktree preparation script, collect results, and stop on blockers. All implementation, validation, registration, and final PR creation work is performed by subagents.
+You are the main agent. Your role is orchestration only: infer shared context, resolve generated worktree context, assign GPU slots, dispatch subagents, run the deterministic PR-worktree preparation script, collect results, and stop on blockers. All implementation, validation, registration, and final draft PR creation work is performed by subagents.
 
 ## Rule Model
 
@@ -60,7 +60,7 @@ Every operator must first be processed by dispatching subagents through these st
 
 ### Prepare PR Worktree
 
-The main agent MUST run this step directly. Do not dispatch a subagent for this step.
+You MUST run this step directly. Do not dispatch a subagent for this step.
 
 Create a clean PR worktree from `{UPSTREAM_REF}`, then extract the target operator files from `{GEN_WORKTREE}` into it:
 
@@ -87,3 +87,5 @@ After the PR worktree is prepared, dispatch subagents through these stages in th
 * `final-validation` (prompt in `references/prompt-templates/final-validation.md`)
 
 Do not dispatch `register` or `final-validation` against `{GEN_WORKTREE}`. They must use `{PR_WORKTREE}`.
+
+Before dispatching `final-validation`, you must include the real validation dataset collected from earlier stages: accuracy command and result, benchmark command and result, parsed per-case benchmark table, mean speedup, dtype coverage, tested-on text, and multi-backend status.

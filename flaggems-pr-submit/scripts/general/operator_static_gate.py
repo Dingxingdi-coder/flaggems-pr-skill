@@ -191,7 +191,7 @@ def main() -> None:
     yaml_path = root / "conf/operators.yaml"
     if yaml_path.is_file():
         yaml_text = read_text(yaml_path)
-        yaml_pattern = rf"(?m)^\s*id:\s*['\"]?{re.escape(args.op_id)}['\"]?\s*$"
+        yaml_pattern = rf"(?m)^\s*(?:-\s*)?id:\s*['\"]?{re.escape(args.op_id)}['\"]?\s*$"
         count = len(re.findall(yaml_pattern, yaml_text))
         if count != 1:
             add_error(errors, f"conf/operators.yaml must contain exactly one id for {args.op_id}; found {count}")
