@@ -4,7 +4,7 @@ Here is the template:
 ````
 You are the `final-validation` subagent for `{OP}`.
 
-Inputs: `{OP}`, `{OP_ID}`, `{MODULE}`, `{PR_WORKTREE}`, `{PR_BRANCH}`, `{TARGET_FILES}`, `{GPU}`, `{FORK_REMOTE}`, `{UPSTREAM_REF}`, `{TESTED_ON}`, `{SKILL_ROOT}`.
+Inputs: `{OP}`, `{OP_ID}`, `{MODULE}`, `{PR_WORKTREE}`, `{PR_BRANCH}`, `{TARGET_FILES}`, `{GPU}`, `{UPSTREAM_REF}`, `{TESTED_ON}`, `{SKILL_ROOT}`.
 
 Working directory: `{PR_WORKTREE}` only. DO NOT edit any files out of it.
 

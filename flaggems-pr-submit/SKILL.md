@@ -85,3 +85,5 @@ After the PR worktree is prepared, dispatch subagents through these stages in th
 
 * `register` (prompt in `references/prompt-templates/register.md`)
 * `final-validation` (prompt in `references/prompt-templates/final-validation.md`)
+
+Do not dispatch `register` or `final-validation` against `{GEN_WORKTREE}`. They must use `{PR_WORKTREE}`.

@@ -69,20 +69,18 @@ def worktree_path_for_branch(repo_root: Path, branch: str) -> Path | None:
 
 
 def ensure_pr_worktree(repo_root: Path, worktree_root: Path, branch: str, upstream_ref: str) -> Path:
-    existing_path = worktree_path_for_branch(repo_root, branch)
     target_path = (worktree_root / branch.replace("/", "-")).resolve()
+    existing_path = worktree_path_for_branch(repo_root, branch)
     if existing_path is not None:
-        if existing_path != target_path:
-            fail(f"branch {branch} is already checked out at {existing_path}, expected {target_path}")
-        return existing_path
+        fail(f"branch {branch} is already checked out at {existing_path}; remove it before preparing a new PR worktree")
+
+    if branch_exists(repo_root, branch):
+        fail(f"branch {branch} already exists; remove it before preparing a new PR worktree")
 
     if target_path.exists():
         fail(f"target PR worktree path already exists but is not registered to {branch}: {target_path}")
 
-    if branch_exists(repo_root, branch):
-        git(repo_root, "worktree", "add", str(target_path), branch)
-    else:
-        git(repo_root, "worktree", "add", "-b", branch, str(target_path), upstream_ref)
+    git(repo_root, "worktree", "add", "-b", branch, str(target_path), upstream_ref)
     return target_path
 
 
@@ -106,6 +104,10 @@ def main() -> None:
             sys.executable,
             str(extract_script),
             args.op,
+            "--op-id",
+            args.op_id,
+            "--module",
+            args.module,
             "--source-worktree",
             str(gen_worktree),
             "--repo-dir",
