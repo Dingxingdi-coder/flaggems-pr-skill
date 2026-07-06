@@ -29,7 +29,7 @@ No [KernelGen][Nvidia] PRs updated after <since>.
 Copy this prompt for the cloud agent, then paste the JSON output from `scripts/collect_kernelgen_review_delta.py`.
 
 ```text
-You are maintaining the skill repository for `Dingxingdi-coder/flaggems-pr-submit`.
+You are maintaining the skill repository for `Dingxingdi-coder/flaggems-pr-submit`. Directly edit the skill repository to add or modify constraints.
 
 Do not use the `flaggems-pr-submit` skill. This is skill maintenance, not a FlagGems PR submission.
 
@@ -73,5 +73,5 @@ Do not modify this README during daily maintenance unless the maintenance workfl
 
 When finished, run `python scripts/skill_meta_gate.py`.
 
-Return a concise summary of the constraints changed.
+Also return a table with exactly one row per PR from the input JSON in the chat. You must carefully read every listed PR before deciding whether it contributes any reusable constraint. If a PR does not lead to any added or modified constraint, fill the relevant table cells with `None`. Include these columns: PR, reviewer feedback distilled, classification, target file or script, exact constraint text added or modified, and whether `skill_meta_gate.py` passed.
 ```
