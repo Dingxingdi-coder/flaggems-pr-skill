@@ -283,6 +283,30 @@ def github_repo_slug(worktree: Path, remote: str) -> str:
     return "flagos-ai/FlagGems"
 
 
+def pr_url_for_commit(worktree: Path, repo: str, commit: str) -> str | None:
+    pr = run_gh(
+        worktree,
+        "api",
+        f"repos/{repo}/commits/{commit}/pulls",
+        "-H",
+        "Accept: application/vnd.github+json",
+        "--jq",
+        ".[0].html_url",
+    )
+    if pr.returncode == 0 and pr.stdout.strip():
+        return pr.stdout.strip()
+
+    message = run_git(worktree, "show", "-s", "--format=%B", commit, check=False)
+    match = re.search(r"\(#(\d+)\)", message.stdout)
+    if not match:
+        return None
+
+    pr_view = run_gh(worktree, "pr", "view", match.group(1), "--repo", repo, "--json", "url", "--jq", ".url")
+    if pr_view.returncode == 0 and pr_view.stdout.strip():
+        return pr_view.stdout.strip()
+    return None
+
+
 def matching_yaml_line(text: str, op_id: str) -> int | None:
     target = normalize_name(op_id)
     for index, line in enumerate(text.splitlines(), start=1):
@@ -295,7 +319,48 @@ def matching_yaml_line(text: str, op_id: str) -> int | None:
     return None
 
 
-def upstream_yaml_conflict_details(worktree: Path, base_ref: str, op_id: str, remote: str) -> dict[str, str]:
+def first_commit_from_log(worktree: Path, *args: str) -> str | None:
+    result = run_git(worktree, "log", "--format=%H", "--reverse", *args, check=False)
+    if result.returncode != 0:
+        return None
+    return next((line.strip() for line in result.stdout.splitlines() if line.strip()), None)
+
+
+def operator_source_details(worktree: Path, base_ref: str, op_id: str, module: str, remote: str) -> dict[str, str]:
+    repo = github_repo_slug(worktree, remote)
+    kernel_path = f"src/flag_gems/ops/{module}.py"
+
+    if upstream_has_path(worktree, base_ref, kernel_path):
+        commit = first_commit_from_log(worktree, "--diff-filter=A", base_ref, "--", kernel_path)
+        if commit:
+            details = {
+                "OP_SOURCE_KIND": "implementation",
+                "OP_SOURCE_PATH": kernel_path,
+                "OP_SOURCE_COMMIT": commit,
+            }
+            pr_url = pr_url_for_commit(worktree, repo, commit)
+            if pr_url:
+                details["OP_SOURCE_PR_URL"] = pr_url
+            return details
+
+    yaml_path = "conf/operators.yaml"
+    for needle in (f"name: {op_id}", f"id: {op_id}"):
+        commit = first_commit_from_log(worktree, f"-S{needle}", base_ref, "--", yaml_path)
+        if commit:
+            details = {
+                "OP_SOURCE_KIND": "yaml",
+                "OP_SOURCE_PATH": yaml_path,
+                "OP_SOURCE_COMMIT": commit,
+            }
+            pr_url = pr_url_for_commit(worktree, repo, commit)
+            if pr_url:
+                details["OP_SOURCE_PR_URL"] = pr_url
+            return details
+
+    return {}
+
+
+def upstream_yaml_conflict_details(worktree: Path, base_ref: str, op_id: str, module: str, remote: str) -> dict[str, str]:
     path = "conf/operators.yaml"
     result = run_git(worktree, "show", f"{base_ref}:{path}", check=False)
     if result.returncode != 0:
@@ -303,37 +368,25 @@ def upstream_yaml_conflict_details(worktree: Path, base_ref: str, op_id: str, re
 
     line = matching_yaml_line(result.stdout, op_id)
     if line is None:
-        return {"UPSTREAM_EVIDENCE": f"{base_ref}:{path} contains {op_id}"}
+        details = {"UPSTREAM_EVIDENCE": f"{base_ref}:{path} contains {op_id}"}
+        details.update(operator_source_details(worktree, base_ref, op_id, module, remote))
+        return details
 
     details = {"UPSTREAM_EVIDENCE": f"{base_ref}:{path}:{line} contains {op_id}"}
     blame = run_git(worktree, "blame", "-L", f"{line},{line}", "--porcelain", base_ref, "--", path, check=False)
     if blame.returncode != 0 or not blame.stdout.strip():
+        details.update(operator_source_details(worktree, base_ref, op_id, module, remote))
         return details
 
     commit = blame.stdout.split()[0]
     details["UPSTREAM_COMMIT"] = commit
 
     repo = github_repo_slug(worktree, remote)
-    pr = run_gh(
-        worktree,
-        "api",
-        f"repos/{repo}/commits/{commit}/pulls",
-        "-H",
-        "Accept: application/vnd.github+json",
-        "--jq",
-        ".[0].html_url",
-    )
-    if pr.returncode == 0 and pr.stdout.strip():
-        details["UPSTREAM_PR_URL"] = pr.stdout.strip()
-        return details
+    pr_url = pr_url_for_commit(worktree, repo, commit)
+    if pr_url:
+        details["UPSTREAM_PR_URL"] = pr_url
 
-    message = run_git(worktree, "show", "-s", "--format=%B", commit, check=False)
-    match = re.search(r"\(#(\d+)\)", message.stdout)
-    if match:
-        pr_view = run_gh(worktree, "pr", "view", match.group(1), "--repo", repo, "--json", "url", "--jq", ".url")
-        if pr_view.returncode == 0 and pr_view.stdout.strip():
-            details["UPSTREAM_PR_URL"] = pr_view.stdout.strip()
-
+    details.update(operator_source_details(worktree, base_ref, op_id, module, remote))
     return details
 
 
@@ -379,7 +432,7 @@ def main() -> None:
     if upstream_has_yaml_id(worktree, base_ref, context.op_id):
         fail_upstream(
             f"upstream already has yaml id {context.op_id}",
-            upstream_yaml_conflict_details(worktree, base_ref, context.op_id, args.upstream),
+            upstream_yaml_conflict_details(worktree, base_ref, context.op_id, context.module, args.upstream),
         )
     if upstream_has_registered_op(worktree, base_ref, context.op_id):
         fail(f"upstream already registers operator {context.op_id}")

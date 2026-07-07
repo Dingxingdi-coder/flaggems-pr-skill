@@ -45,7 +45,7 @@ You MUST create a task for each of these items and complete them in order:
 - `<repo_root>` is the cwd, `<worktree_root>` is `<repo_root>/.worktrees/`.
 - `{skill_root}` is the root of the skill.
 
-If there is any context you don't get, stop and ask the user for it. Do not guess or assume.
+If there is any context mentioned above you don't get, stop and ask the user for it. Do not guess or assume.
 
 ### Resolve Operator Context
 
