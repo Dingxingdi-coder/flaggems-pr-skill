@@ -4,9 +4,15 @@
 from __future__ import annotations
 
 import argparse
+import ast
+from dataclasses import dataclass
+from difflib import get_close_matches
+import re
 import subprocess
 import sys
 from pathlib import Path
+
+import yaml
 
 
 SPECIAL_OPS = {
@@ -24,6 +30,15 @@ def fail(message: str) -> None:
 def strip_aten(name: object) -> str:
     text = "" if name is None else str(name).strip()
     return text[6:] if text.startswith("aten::") else text
+
+
+def normalize_name(name: object) -> str:
+    text = strip_aten(name)
+    if text.startswith("gen-"):
+        text = text[4:]
+    if text.endswith(".py"):
+        text = text[:-3]
+    return text.replace("-", "_").casefold()
 
 
 def run_git(worktree: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -51,6 +66,31 @@ def expected_branches(op: str, op_id: str) -> set[str]:
     return {f"gen-{op}", f"gen-{op_id}"}
 
 
+@dataclass(frozen=True)
+class GenCandidate:
+    branch: str
+    op: str
+    worktree: Path | None
+
+    @property
+    def keys(self) -> set[str]:
+        module, op_id = resolve_module_and_id(self.op)
+        return {normalize_name(self.op), normalize_name(module), normalize_name(op_id)}
+
+
+@dataclass(frozen=True)
+class OperatorContext:
+    op: str
+    op_id: str
+    module: str
+
+
+@dataclass(frozen=True)
+class YamlCandidate:
+    op_id: str
+    keys: set[str]
+
+
 def branch_for(worktree: Path) -> str | None:
     result = run_git(worktree, "rev-parse", "--abbrev-ref", "HEAD", check=False)
     if result.returncode != 0:
@@ -58,33 +98,133 @@ def branch_for(worktree: Path) -> str | None:
     return result.stdout.strip()
 
 
-def resolve_worktree(worktree_root: Path, op: str, op_id: str) -> tuple[Path, str]:
-    expected = expected_branches(op, op_id)
-    candidates = [worktree_root / branch for branch in sorted(expected)]
+def query_keys_for(op: str) -> set[str]:
+    module, op_id = resolve_module_and_id(op)
+    return {normalize_name(op), normalize_name(module), normalize_name(op_id)}
 
-    matches: list[tuple[Path, str]] = []
-    for candidate in candidates:
-        if not candidate.is_dir():
-            continue
-        branch = branch_for(candidate)
-        if branch in expected:
-            matches.append((candidate.resolve(), branch))
 
-    if not matches and worktree_root.is_dir():
-        for candidate in sorted(worktree_root.glob("gen-*")):
-            if candidate in candidates or not candidate.is_dir():
-                continue
-            branch = branch_for(candidate)
-            if branch in expected:
-                matches.append((candidate.resolve(), branch))
+def gen_branches(repo_root: Path) -> list[str]:
+    result = run_git(repo_root, "branch", "--format=%(refname:short)", "--list", "gen-*")
+    return [line.strip() for line in result.stdout.splitlines() if line.strip().startswith("gen-")]
+
+
+def registered_worktrees(repo_root: Path) -> dict[str, Path]:
+    result = run_git(repo_root, "worktree", "list", "--porcelain")
+    by_branch: dict[str, Path] = {}
+    current_path: Path | None = None
+    for line in result.stdout.splitlines():
+        if line.startswith("worktree "):
+            current_path = Path(line.removeprefix("worktree ")).resolve()
+        elif line.startswith("branch refs/heads/gen-") and current_path is not None:
+            branch = line.removeprefix("branch refs/heads/")
+            by_branch[branch] = current_path
+    return by_branch
+
+
+def fallback_worktree_for_branch(worktree_root: Path, branch: str) -> Path | None:
+    candidate = worktree_root / branch
+    if not candidate.is_dir():
+        return None
+    if branch_for(candidate) != branch:
+        return None
+    return candidate.resolve()
+
+
+def collect_gen_candidates(repo_root: Path, worktree_root: Path) -> list[GenCandidate]:
+    worktrees = registered_worktrees(repo_root)
+    candidates: list[GenCandidate] = []
+    for branch in gen_branches(repo_root):
+        op = branch.removeprefix("gen-")
+        worktree = worktrees.get(branch) or fallback_worktree_for_branch(worktree_root, branch)
+        candidates.append(GenCandidate(branch=branch, op=op, worktree=worktree))
+    return candidates
+
+
+def resolve_worktree(repo_root: Path, worktree_root: Path, raw_op: str) -> tuple[Path, str, str]:
+    keys = query_keys_for(raw_op)
+    candidates = collect_gen_candidates(repo_root, worktree_root)
+    matches = [candidate for candidate in candidates if keys & candidate.keys]
 
     if not matches:
-        tried = ", ".join(str(path) for path in candidates)
-        fail(f"generated worktree not found for {op}; tried {tried} and scanned {worktree_root}/gen-* branches")
+        available = sorted({key for candidate in candidates for key in candidate.keys})
+        close = get_close_matches(sorted(keys)[0], available, n=8, cutoff=0.6)
+        hint = f"; close normalized gen-* matches: {', '.join(close)}" if close else ""
+        fail(f"generated gen-* branch not found for {raw_op}; normalized keys: {sorted(keys)}{hint}")
     if len(matches) > 1:
-        found = ", ".join(f"{path} ({branch})" for path, branch in matches)
-        fail(f"multiple generated worktrees matched {op}: {found}")
-    return matches[0]
+        found = ", ".join(
+            f"{candidate.branch}"
+            + (f" at {candidate.worktree}" if candidate.worktree is not None else " (no registered worktree)")
+            for candidate in matches
+        )
+        fail(f"multiple gen-* branches matched {raw_op}; normalized keys {sorted(keys)} matched: {found}")
+
+    match = matches[0]
+    if match.worktree is None:
+        fail(
+            f"matched {match.branch} for {raw_op}, but it has no usable worktree under {worktree_root}; "
+            f"check `git worktree list` or recreate the worktree for that branch"
+        )
+    return match.worktree, match.branch, match.op
+
+
+def yaml_entries_from_text(text: str) -> list[dict]:
+    data = yaml.safe_load(text) or {}
+    if isinstance(data, dict):
+        entries = data.get("ops", [])
+    else:
+        entries = data
+    return [entry for entry in entries if isinstance(entry, dict)]
+
+
+def yaml_candidates(worktree: Path, keys: set[str]) -> list[YamlCandidate]:
+    yaml_path = worktree / "conf/operators.yaml"
+    if not yaml_path.is_file():
+        return []
+
+    candidates: list[YamlCandidate] = []
+    for entry in yaml_entries_from_text(yaml_path.read_text()):
+        names = [entry.get("id"), entry.get("name")]
+        names.extend(entry.get("for") or [])
+        candidate_keys = {normalize_name(name) for name in names if name}
+        if keys & candidate_keys:
+            op_id = str(entry.get("id") or entry.get("name") or next(iter(entry.get("for") or []), "")).strip()
+            if op_id:
+                candidates.append(YamlCandidate(op_id=op_id, keys=candidate_keys))
+    return candidates
+
+
+def module_imports(worktree: Path) -> dict[str, str]:
+    init_path = worktree / "src/flag_gems/ops/__init__.py"
+    if not init_path.is_file():
+        return {}
+
+    tree = ast.parse(init_path.read_text())
+    imports: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom) or not node.module:
+            continue
+        prefix = "flag_gems.ops."
+        if not node.module.startswith(prefix):
+            continue
+        module = node.module.removeprefix(prefix)
+        for alias in node.names:
+            imports[alias.name] = module
+    return imports
+
+
+def resolve_operator_context(worktree: Path, raw_op: str, branch_op: str) -> OperatorContext:
+    fallback_module, fallback_op_id = resolve_module_and_id(branch_op)
+    keys = query_keys_for(raw_op) | query_keys_for(branch_op)
+    candidates = yaml_candidates(worktree, keys)
+
+    if len(candidates) > 1:
+        found = ", ".join(f"OP_ID={candidate.op_id}" for candidate in candidates)
+        fail(f"multiple operator yaml entries matched {raw_op}; candidates: {found}")
+
+    op_id = candidates[0].op_id if candidates else fallback_op_id
+    imports = module_imports(worktree)
+    module = imports.get(op_id) or fallback_module
+    return OperatorContext(op=branch_op, op_id=op_id, module=module)
 
 
 def check_branch(worktree: Path, op: str, op_id: str) -> str:
@@ -114,9 +254,22 @@ def upstream_has_yaml_id(worktree: Path, base_ref: str, op_id: str) -> bool:
     result = run_git(worktree, "show", f"{base_ref}:conf/operators.yaml", check=False)
     if result.returncode != 0:
         fail(f"cannot read conf/operators.yaml from {base_ref}")
-    target_lines = {f"id: {op_id}", f"id: '{op_id}'", f'id: "{op_id}"'}
-    for line in result.stdout.splitlines():
-        if line.strip() in target_lines:
+    target = normalize_name(op_id)
+    for entry in yaml_entries_from_text(result.stdout):
+        names = [entry.get("id"), entry.get("name")]
+        names.extend(entry.get("for") or [])
+        if any(normalize_name(name) == target for name in names if name):
+            return True
+    return False
+
+
+def upstream_has_registered_op(worktree: Path, base_ref: str, op_id: str) -> bool:
+    target = normalize_name(op_id)
+    for path in ("src/flag_gems/__init__.py", "src/flag_gems/ops/__init__.py"):
+        result = run_git(worktree, "show", f"{base_ref}:{path}", check=False)
+        if result.returncode != 0:
+            continue
+        if target in {normalize_name(name) for name in set(re.findall(r"\b\w+\b", result.stdout))}:
             return True
     return False
 
@@ -124,6 +277,7 @@ def upstream_has_yaml_id(worktree: Path, base_ref: str, op_id: str) -> bool:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--raw-op", required=True)
+    parser.add_argument("--repo-root", type=Path)
     parser.add_argument("--worktree-root", type=Path, required=True)
     parser.add_argument("--upstream", default="upstream")
     parser.add_argument("--base-branch", default="master")
@@ -132,21 +286,25 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    op = strip_aten(args.raw_op)
-    module, op_id = resolve_module_and_id(op)
-    worktree, _branch = resolve_worktree(args.worktree_root, op, op_id)
-    branch = check_branch(worktree, op, op_id)
+    repo_root = (args.repo_root or args.worktree_root.parent).resolve()
+    worktree_root = args.worktree_root.resolve()
+    raw_op = strip_aten(args.raw_op)
+    worktree, _branch, branch_op = resolve_worktree(repo_root, worktree_root, raw_op)
+    context = resolve_operator_context(worktree, raw_op, branch_op)
+    branch = check_branch(worktree, context.op, context.op_id)
     base_ref = fetch_upstream(worktree, args.upstream, args.base_branch)
 
-    kernel_path = f"src/flag_gems/ops/{module}.py"
-    if upstream_has_path(worktree, base_ref, kernel_path) and not (op.endswith("_") and not is_dunder_operator(op)):
+    kernel_path = f"src/flag_gems/ops/{context.module}.py"
+    if upstream_has_yaml_id(worktree, base_ref, context.op_id):
+        fail(f"upstream already has yaml id {context.op_id}")
+    if upstream_has_registered_op(worktree, base_ref, context.op_id):
+        fail(f"upstream already registers operator {context.op_id}")
+    if upstream_has_path(worktree, base_ref, kernel_path) and not (context.op.endswith("_") and not is_dunder_operator(context.op)):
         fail(f"upstream already has {kernel_path}")
-    if upstream_has_yaml_id(worktree, base_ref, op_id):
-        fail(f"upstream already has yaml id {op_id}")
 
-    print(f"OP={op}")
-    print(f"OP_ID={op_id}")
-    print(f"MODULE={module}")
+    print(f"OP={context.op}")
+    print(f"OP_ID={context.op_id}")
+    print(f"MODULE={context.module}")
     print(f"GEN_WORKTREE={worktree}")
     print(f"GEN_BRANCH={branch}")
     print(f"UPSTREAM_REF={base_ref}")

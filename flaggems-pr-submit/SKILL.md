@@ -36,6 +36,7 @@ You MUST create a task for each of these items and complete them in order:
 
 ### Get the Context
 
+- Determine the Docker container name for running commands. Run commands through `docker exec "{CONTAINER}"` unless the user explicitly says otherwise. Tell the subagents to do so as well.
 - Use `nvidia-smi` to determine available GPU slots and tested-on text.
 - Confirm a GitHub token is available by running `python "{skill_root}/scripts/general/check_github_token.py"`. The token must be provided through `GH_TOKEN` or `GITHUB_TOKEN`; never print the token value, run `gh auth login`, or persist credentials on the shared machine.
 - The user provides at least one raw operator name that identifies an existing `gen-*` worktree or branch. The number of operators must not exceed available GPU slots. Treat the provided operator name as `{raw_op}`.
