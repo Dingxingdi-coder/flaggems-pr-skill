@@ -26,7 +26,7 @@ Do not skip stages, invent benchmark results, or fabricate multi-backend data.
 
 You MUST create a task for each of these items and complete them in order:
 
-- [ ] **Step 0: Gather Context** — determine available GPU slots, collect raw operator names and infer repository and worktree roots. Stop if any context is missing.
+- [ ] **Step 0: Gather Context** — determine available GPU slots, confirm a GitHub token is available, collect raw operator names and infer repository and worktree roots. Stop if any context is missing.
 - [ ] **Step 1: Resolve Operator Context** — for each raw operator, run the context resolver; if it fails, stop that operator and report the error.
 - [ ] **Step 2: Implementation Review and Worktree Validation** — dispatch `implementation-review` and `worktree-test-benchmark`; block on failure.
 - [ ] **Step 3: Prepare PR Worktree** — main agent runs the deterministic clean PR worktree script; block on failure.
@@ -37,6 +37,7 @@ You MUST create a task for each of these items and complete them in order:
 ### Get the Context
 
 - Use `nvidia-smi` to determine available GPU slots and tested-on text.
+- Confirm a GitHub token is available by running `python "{skill_root}/scripts/general/check_github_token.py"`. The token must be provided through `GH_TOKEN` or `GITHUB_TOKEN`; never print the token value, run `gh auth login`, or persist credentials on the shared machine.
 - The user provides at least one raw operator name that identifies an existing `gen-*` worktree or branch. The number of operators must not exceed available GPU slots. Treat the provided operator name as `{raw_op}`.
 - `<repo_root>` is the cwd, `<worktree_root>` is `<repo_root>/.worktrees/`.
 - `{skill_root}` is the root of the skill.

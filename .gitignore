@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+*.so
+*.o
+*.cubin
+*.ptx
+*.ncu-rep
+.env
+runs/
+.DS_Store
+*.egg-info/
+.codex/
