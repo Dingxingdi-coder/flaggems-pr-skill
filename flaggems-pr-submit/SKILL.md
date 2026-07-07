@@ -20,6 +20,8 @@ Before dispatching any subagent, replace every `{...}` placeholder in the releva
 
 The main agent must not do subagent work or read stage-specific subagent reference files. When dispatching a subagent, remind it to stay within its assigned stage and not perform other stages' duties.
 
+For Python, pytest, and benchmark commands inside Docker, subagents must use the assigned worktree's virtual environment Python, such as `{GEN_WORKTREE}/.venv/bin/python -m ...` or `{PR_WORKTREE}/.venv/bin/python -m ...`. They must still run commands through `docker exec "{CONTAINER}"` unless the user explicitly says otherwise.
+
 If any stage blocks, stop that operator immediately and report the blocked stage, the command that failed or blocked, the reason, and the required user input or repair direction.
 
 Do not skip stages, invent benchmark results, or fabricate multi-backend data.
@@ -38,7 +40,7 @@ You MUST create a task for each of these items and complete them in order:
 
 ### Get the Context
 
-- Determine the Docker container name for running commands. Run commands through `docker exec "{CONTAINER}"` unless the user explicitly says otherwise. Tell the subagents to do so as well.
+- Get the Docker container name for running commands from the user. Run commands through `docker exec "{CONTAINER}"` unless the user explicitly says otherwise. Tell the subagents to do so as well.
 - Use `nvidia-smi` to determine available GPU slots and tested-on text.
 - Confirm a GitHub token is available by running `python "{skill_root}/scripts/general/check_github_token.py"`. The token must be provided through `GH_TOKEN` or `GITHUB_TOKEN`; never print the token value, run `gh auth login`, or persist credentials on the shared machine.
 - The user provides at least one raw operator name that identifies an existing `gen-*` worktree or branch. The number of operators must not exceed available GPU slots. Treat the provided operator name as `{raw_op}`.
@@ -58,6 +60,12 @@ python "{skill_root}/scripts/name-worktree/resolve_op_context.py" --raw-op "{raw
 If the resolver exits nonzero or cannot complete exactly as invoked above, stop that operator immediately and report the command, error, and required user input or repair direction.
 
 If the resolver reports that upstream already contains the operator, also report any `UPSTREAM_PR_URL`, `UPSTREAM_COMMIT`, and `UPSTREAM_EVIDENCE` lines it prints.
+
+After resolving each operator context and before dispatching subagents for `{GEN_WORKTREE}`, create or refresh a worktree-local virtual environment:
+
+```bash
+cd "{GEN_WORKTREE}" && python -m venv --system-site-packages .venv && .venv/bin/python -m pip install -e .
+```
 
 ### Implementation Review and Worktree Validation
 
@@ -86,6 +94,12 @@ python "{skill_root}/scripts/prepare-pr-worktree/prepare_pr_worktree.py" \
 If this command exits nonzero or cannot complete exactly as invoked above, stop that operator immediately and report the command, error, and required user input or repair direction.
 
 The command must output `{PR_BRANCH}`, `{PR_WORKTREE}`, and `{TARGET_FILES}`. Use these values for all later stages.
+
+After the PR worktree is prepared and before dispatching subagents for `{PR_WORKTREE}`, create or refresh a worktree-local virtual environment:
+
+```bash
+cd "{PR_WORKTREE}" && python -m venv --system-site-packages .venv && .venv/bin/python -m pip install -e .
+```
 
 ### Register and Final Validation
 

@@ -4,9 +4,11 @@ Here is the template:
 ````
 You are the `worktree-test-benchmark` subagent for `{OP}`.
 
-Inputs: `{OP}`, `{OP_ID}`, `{MODULE}`, `{GEN_WORKTREE}`, `{GPU}`, `{SKILL_ROOT}`.
+Inputs: `{OP}`, `{OP_ID}`, `{MODULE}`, `{GEN_WORKTREE}`, `{GPU}`, `{CONTAINER}`, `{SKILL_ROOT}`.
 
 Working directory: `{GEN_WORKTREE}` only. DO NOT edit any files out of it.
+
+Run commands through `docker exec "{CONTAINER}"` unless instructed otherwise. For Python, pytest, and benchmark commands inside Docker, use `{GEN_WORKTREE}/.venv/bin/python -m ...`.
 
 Reference files to read during the workflow:
 

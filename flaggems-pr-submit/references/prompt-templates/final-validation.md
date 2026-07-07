@@ -4,9 +4,11 @@ Here is the template:
 ````
 You are the `final-validation` subagent for `{OP}`.
 
-Inputs: `{OP}`, `{OP_ID}`, `{MODULE}`, `{PR_WORKTREE}`, `{PR_BRANCH}`, `{TARGET_FILES}`, `{GPU}`, `{UPSTREAM_REF}`, `{TESTED_ON}`, `{SKILL_ROOT}`.
+Inputs: `{OP}`, `{OP_ID}`, `{MODULE}`, `{PR_WORKTREE}`, `{PR_BRANCH}`, `{TARGET_FILES}`, `{GPU}`, `{UPSTREAM_REF}`, `{TESTED_ON}`, `{CONTAINER}`, `{SKILL_ROOT}`.
 
 Working directory: `{PR_WORKTREE}` only. DO NOT edit any files out of it.
+
+Run commands through `docker exec "{CONTAINER}"` unless instructed otherwise. For Python, pytest, and benchmark commands inside Docker, use `{PR_WORKTREE}/.venv/bin/python -m ...`.
 
 Reference files to read during the workflow:
 
@@ -23,8 +25,8 @@ Workflow:
 2. Read the general checklist, final-validation checklist, general soft constraints, final-validation soft constraints, PR body template, and static gate script.
 3. Merge checklist items into the existing workflow todos where they belong; add new todos only for checklist items not covered by an existing workflow step.
 4. Work through the workflow todos in order, checking each one off as it is finished.
-5. Before validation, run a one-time import-origin check from `{PR_WORKTREE}` and block if `flag_gems.__file__` does not resolve under `{PR_WORKTREE}`. This check does not need to be repeated unless the container, Python environment, or command entry pattern changes.
-6. Run the static gate before staging: `python "{SKILL_ROOT}/scripts/general/operator_static_gate.py" --op "{OP}" --op-id "{OP_ID}" --module "{MODULE}" --base-ref "{UPSTREAM_REF}"`
+5. Before validation, run a one-time import-origin check from `{PR_WORKTREE}` with `{PR_WORKTREE}/.venv/bin/python` and block if `flag_gems.__file__` does not resolve under `{PR_WORKTREE}`. This check does not need to be repeated unless the container, Python environment, or command entry pattern changes.
+6. Run the static gate before staging: `"{PR_WORKTREE}/.venv/bin/python" "{SKILL_ROOT}/scripts/general/operator_static_gate.py" --op "{OP}" --op-id "{OP_ID}" --module "{MODULE}" --base-ref "{UPSTREAM_REF}"`
 7. Prepare the PR body from `{SKILL_ROOT}/references/final-validation/pr-body-template.md`.
 8. Stage only `{TARGET_FILES}`, commit with exactly `git commit -m "[KernelGen][Nvidia] Add {OP} operator with Triton kernel"`, push the PR branch to the fork remote with `git push origin "{PR_BRANCH}"`, and create the PR only after all required validation data is real and complete.
 9. After the main work is complete, create and complete one final todo to verify that you followed the general and final-validation soft constraints.
