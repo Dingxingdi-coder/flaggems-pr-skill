@@ -18,6 +18,8 @@ Soft constraints require semantic judgment about code, reviewer intent, test beh
 
 Before dispatching any subagent, replace every `{...}` placeholder in the relevant template.
 
+The main agent must not do subagent work or read stage-specific subagent reference files. When dispatching a subagent, remind it to stay within its assigned stage and not perform other stages' duties.
+
 If any stage blocks, stop that operator immediately and report the blocked stage, the command that failed or blocked, the reason, and the required user input or repair direction.
 
 Do not skip stages, invent benchmark results, or fabricate multi-backend data.
@@ -54,6 +56,8 @@ python "{skill_root}/scripts/name-worktree/resolve_op_context.py" --raw-op "{raw
 ```
 
 If the resolver exits nonzero or cannot complete exactly as invoked above, stop that operator immediately and report the command, error, and required user input or repair direction.
+
+If the resolver reports that upstream already contains the operator, also report any `UPSTREAM_PR_URL`, `UPSTREAM_COMMIT`, and `UPSTREAM_EVIDENCE` lines it prints.
 
 ### Implementation Review and Worktree Validation
 

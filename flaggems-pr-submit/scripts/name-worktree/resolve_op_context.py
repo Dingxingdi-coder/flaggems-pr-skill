@@ -51,6 +51,17 @@ def run_git(worktree: Path, *args: str, check: bool = True) -> subprocess.Comple
     )
 
 
+def run_gh(worktree: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["gh", *args],
+        cwd=worktree,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
 def is_dunder_operator(op: str) -> bool:
     return op.startswith("__") and op.endswith("__")
 
@@ -263,6 +274,76 @@ def upstream_has_yaml_id(worktree: Path, base_ref: str, op_id: str) -> bool:
     return False
 
 
+def github_repo_slug(worktree: Path, remote: str) -> str:
+    result = run_git(worktree, "remote", "get-url", remote, check=False)
+    url = result.stdout.strip()
+    match = re.search(r"github\.com[:/]([^/]+)/([^/\s]+?)(?:\.git)?$", url)
+    if match:
+        return f"{match.group(1)}/{match.group(2)}"
+    return "flagos-ai/FlagGems"
+
+
+def matching_yaml_line(text: str, op_id: str) -> int | None:
+    target = normalize_name(op_id)
+    for index, line in enumerate(text.splitlines(), start=1):
+        match = re.match(r"\s*(?:-\s*)?(?:id|name)\s*:\s*(.+?)\s*$", line)
+        if match and normalize_name(match.group(1).strip("\"'")) == target:
+            return index
+        match = re.match(r"\s*-\s*(.+?)\s*$", line)
+        if match and normalize_name(match.group(1).strip("\"'")) == target:
+            return index
+    return None
+
+
+def upstream_yaml_conflict_details(worktree: Path, base_ref: str, op_id: str, remote: str) -> dict[str, str]:
+    path = "conf/operators.yaml"
+    result = run_git(worktree, "show", f"{base_ref}:{path}", check=False)
+    if result.returncode != 0:
+        return {}
+
+    line = matching_yaml_line(result.stdout, op_id)
+    if line is None:
+        return {"UPSTREAM_EVIDENCE": f"{base_ref}:{path} contains {op_id}"}
+
+    details = {"UPSTREAM_EVIDENCE": f"{base_ref}:{path}:{line} contains {op_id}"}
+    blame = run_git(worktree, "blame", "-L", f"{line},{line}", "--porcelain", base_ref, "--", path, check=False)
+    if blame.returncode != 0 or not blame.stdout.strip():
+        return details
+
+    commit = blame.stdout.split()[0]
+    details["UPSTREAM_COMMIT"] = commit
+
+    repo = github_repo_slug(worktree, remote)
+    pr = run_gh(
+        worktree,
+        "api",
+        f"repos/{repo}/commits/{commit}/pulls",
+        "-H",
+        "Accept: application/vnd.github+json",
+        "--jq",
+        ".[0].html_url",
+    )
+    if pr.returncode == 0 and pr.stdout.strip():
+        details["UPSTREAM_PR_URL"] = pr.stdout.strip()
+        return details
+
+    message = run_git(worktree, "show", "-s", "--format=%B", commit, check=False)
+    match = re.search(r"\(#(\d+)\)", message.stdout)
+    if match:
+        pr_view = run_gh(worktree, "pr", "view", match.group(1), "--repo", repo, "--json", "url", "--jq", ".url")
+        if pr_view.returncode == 0 and pr_view.stdout.strip():
+            details["UPSTREAM_PR_URL"] = pr_view.stdout.strip()
+
+    return details
+
+
+def fail_upstream(message: str, details: dict[str, str]) -> None:
+    print(f"ERROR: {message}", file=sys.stderr)
+    for key, value in details.items():
+        print(f"{key}={value}", file=sys.stderr)
+    raise SystemExit(1)
+
+
 def upstream_has_registered_op(worktree: Path, base_ref: str, op_id: str) -> bool:
     target = normalize_name(op_id)
     for path in ("src/flag_gems/__init__.py", "src/flag_gems/ops/__init__.py"):
@@ -296,7 +377,10 @@ def main() -> None:
 
     kernel_path = f"src/flag_gems/ops/{context.module}.py"
     if upstream_has_yaml_id(worktree, base_ref, context.op_id):
-        fail(f"upstream already has yaml id {context.op_id}")
+        fail_upstream(
+            f"upstream already has yaml id {context.op_id}",
+            upstream_yaml_conflict_details(worktree, base_ref, context.op_id, args.upstream),
+        )
     if upstream_has_registered_op(worktree, base_ref, context.op_id):
         fail(f"upstream already registers operator {context.op_id}")
     if upstream_has_path(worktree, base_ref, kernel_path) and not (context.op.endswith("_") and not is_dunder_operator(context.op)):
