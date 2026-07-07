@@ -85,8 +85,7 @@ class GenCandidate:
 
     @property
     def keys(self) -> set[str]:
-        module, op_id = resolve_module_and_id(self.op)
-        return {normalize_name(self.op), normalize_name(module), normalize_name(op_id)}
+        return identity_keys_for(self.op)
 
 
 @dataclass(frozen=True)
@@ -112,6 +111,11 @@ def branch_for(worktree: Path) -> str | None:
 def query_keys_for(op: str) -> set[str]:
     module, op_id = resolve_module_and_id(op)
     return {normalize_name(op), normalize_name(module), normalize_name(op_id)}
+
+
+def identity_keys_for(op: str) -> set[str]:
+    _module, op_id = resolve_module_and_id(op)
+    return {normalize_name(op), normalize_name(op_id)}
 
 
 def gen_branches(repo_root: Path) -> list[str]:
@@ -152,7 +156,7 @@ def collect_gen_candidates(repo_root: Path, worktree_root: Path) -> list[GenCand
 
 
 def resolve_worktree(repo_root: Path, worktree_root: Path, raw_op: str) -> tuple[Path, str, str]:
-    keys = query_keys_for(raw_op)
+    keys = identity_keys_for(raw_op)
     candidates = collect_gen_candidates(repo_root, worktree_root)
     matches = [candidate for candidate in candidates if keys & candidate.keys]
 
