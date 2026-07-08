@@ -30,7 +30,7 @@ Workflow:
 After registration edits, run:
 
 ```bash
-"{PR_WORKTREE}/.venv/bin/python" "{SKILL_ROOT}/scripts/general/operator_static_gate.py" --op "{OP}" --op-id "{OP_ID}" --module "{MODULE}" --base-ref "{UPSTREAM_REF}"
+docker exec "{CONTAINER}" bash -lc 'cd "{PR_WORKTREE}" && "{PR_WORKTREE}/.venv/bin/python" "{SKILL_ROOT}/scripts/general/operator_static_gate.py" --op "{OP}" --op-id "{OP_ID}" --module "{MODULE}" --base-ref "{UPSTREAM_REF}"'
 ```
 
 Return changed files, registration surfaces touched, static gate command and result, unresolved inconsistencies, and blocking issues.

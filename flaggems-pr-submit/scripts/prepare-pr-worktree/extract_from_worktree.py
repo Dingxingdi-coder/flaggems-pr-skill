@@ -1572,7 +1572,7 @@ def main():
     print(f"  tests/test_{op_id}.py")
     print(f"  benchmark/test_{op_id}.py")
     print(f"  conf/operators.yaml")
-    print(f"\n  接下来运行: CUDA_VISIBLE_DEVICES=<N> python scripts/submit_operator.py {op}")
+    print("\n  接下来按技能流程在 Docker 容器内运行验证、注册和 PR 创建命令。")
 
 
 if __name__ == "__main__":
