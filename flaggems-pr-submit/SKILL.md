@@ -20,7 +20,7 @@ Before dispatching any subagent, replace every `{...}` placeholder in the releva
 
 The main agent must not do subagent work or read stage-specific subagent reference files. When dispatching a subagent, remind it to stay within its assigned stage and not perform other stages' duties.
 
-For Python, pytest, and benchmark commands inside Docker, subagents must use the assigned worktree's virtual environment Python, such as `{GEN_WORKTREE}/.venv/bin/python -m ...` or `{PR_WORKTREE}/.venv/bin/python -m ...`. They must still run commands through `docker exec "{CONTAINER}"` unless the user explicitly says otherwise.
+All workflow shell commands, including main-agent commands, must run through `docker exec "{CONTAINER}"` unless the user explicitly says otherwise. For Python, pytest, and benchmark commands inside Docker, subagents must use the assigned worktree's virtual environment Python, such as `{GEN_WORKTREE}/.venv/bin/python -m ...` or `{PR_WORKTREE}/.venv/bin/python -m ...`.
 
 If any stage blocks, stop that operator immediately and report the blocked stage, the command that failed or blocked, the reason, and the required user input or repair direction.
 
@@ -40,8 +40,8 @@ You MUST create a task for each of these items and complete them in order:
 
 ### Get the Context
 
-- Get the Docker container name for running commands from the user. Run commands through `docker exec "{CONTAINER}"` unless the user explicitly says otherwise. Tell the subagents to do so as well.
-- Use `nvidia-smi` to determine available GPU slots and tested-on text.
+- Get the Docker container name for running commands from the user. Run all workflow shell commands through `docker exec "{CONTAINER}"` unless the user explicitly says otherwise. Tell the subagents to do so as well.
+- Use `docker exec "{CONTAINER}" nvidia-smi` to determine available GPU slots and tested-on text.
 - Confirm a GitHub token is available inside the Docker container by running `docker exec "{CONTAINER}" bash -lc 'python "{skill_root}/scripts/general/check_github_token.py"'`. The token must be available to commands executed in that container through `GH_TOKEN` or `GITHUB_TOKEN`; never print the token value, run `gh auth login`, or persist credentials on the shared machine.
 - The user provides at least one raw operator name that identifies an existing `gen-*` worktree or branch. The number of operators must not exceed available GPU slots. Treat the provided operator name as `{raw_op}`.
 - `<repo_root>` is the cwd, `<worktree_root>` is `<repo_root>/.worktrees/`.
@@ -54,7 +54,7 @@ If there is any context mentioned above you don't get, stop and ask the user for
 For each raw operator, run the resolver before dispatching any subagent:
 
 ```bash
-python "{skill_root}/scripts/name-worktree/resolve_op_context.py" --raw-op "{raw_op}" --worktree-root "{worktree_root}"
+docker exec "{CONTAINER}" bash -lc 'python "{skill_root}/scripts/name-worktree/resolve_op_context.py" --raw-op "{raw_op}" --worktree-root "{worktree_root}"'
 ```
 
 If the resolver exits nonzero or cannot complete exactly as invoked above, stop that operator immediately and report the command, error, and required user input or repair direction.
@@ -64,7 +64,7 @@ If the resolver reports that upstream already contains the operator, also report
 After resolving each operator context and before dispatching subagents for `{GEN_WORKTREE}`, create or refresh a worktree-local virtual environment:
 
 ```bash
-cd "{GEN_WORKTREE}" && python -m venv --system-site-packages .venv && unset PIP_CONSTRAINT && PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/ .venv/bin/python -m pip install -e .
+docker exec "{CONTAINER}" bash -lc 'cd "{GEN_WORKTREE}" && python -m venv --system-site-packages .venv && unset PIP_CONSTRAINT && PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/ .venv/bin/python -m pip install -e .'
 ```
 
 ### Implementation Review and Worktree Validation
@@ -81,14 +81,14 @@ You MUST run this step directly. Do not dispatch a subagent for this step.
 Create a clean PR worktree from `{UPSTREAM_REF}`, then extract the target operator files from `{GEN_WORKTREE}` into it:
 
 ```bash
-python "{skill_root}/scripts/prepare-pr-worktree/prepare_pr_worktree.py" \
+docker exec "{CONTAINER}" bash -lc 'python "{skill_root}/scripts/prepare-pr-worktree/prepare_pr_worktree.py" \
   --op "{OP}" \
   --op-id "{OP_ID}" \
   --module "{MODULE}" \
   --repo-root "{repo_root}" \
   --worktree-root "{worktree_root}" \
   --gen-worktree "{GEN_WORKTREE}" \
-  --upstream-ref "{UPSTREAM_REF}"
+  --upstream-ref "{UPSTREAM_REF}"'
 ```
 
 If this command exits nonzero or cannot complete exactly as invoked above, stop that operator immediately and report the command, error, and required user input or repair direction.
@@ -98,7 +98,7 @@ The command must output `{PR_BRANCH}`, `{PR_WORKTREE}`, and `{TARGET_FILES}`. Us
 After the PR worktree is prepared and before dispatching subagents for `{PR_WORKTREE}`, create or refresh a worktree-local virtual environment:
 
 ```bash
-cd "{PR_WORKTREE}" && python -m venv --system-site-packages .venv && unset PIP_CONSTRAINT && PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/ .venv/bin/python -m pip install -e .
+docker exec "{CONTAINER}" bash -lc 'cd "{PR_WORKTREE}" && python -m venv --system-site-packages .venv && unset PIP_CONSTRAINT && PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/ .venv/bin/python -m pip install -e .'
 ```
 
 ### Register and Final Validation

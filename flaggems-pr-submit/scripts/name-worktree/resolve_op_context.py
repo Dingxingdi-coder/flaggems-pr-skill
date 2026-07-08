@@ -41,6 +41,16 @@ def normalize_name(name: object) -> str:
     return text.replace("-", "_").casefold()
 
 
+def compact_name_key(name: object) -> str:
+    return re.sub(r"[^0-9a-z]+", "", normalize_name(name))
+
+
+def identity_name_keys(*names: str) -> set[str]:
+    keys = {normalize_name(name) for name in names}
+    keys.update(compact_name_key(name) for name in names)
+    return keys
+
+
 def run_git(worktree: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", "-C", str(worktree), *args],
@@ -115,7 +125,7 @@ def query_keys_for(op: str) -> set[str]:
 
 def identity_keys_for(op: str) -> set[str]:
     _module, op_id = resolve_module_and_id(op)
-    return {normalize_name(op), normalize_name(op_id)}
+    return identity_name_keys(op, op_id)
 
 
 def gen_branches(repo_root: Path) -> list[str]:
@@ -169,6 +179,7 @@ def resolve_worktree(repo_root: Path, worktree_root: Path, raw_op: str) -> tuple
         found = ", ".join(
             f"{candidate.branch}"
             + (f" at {candidate.worktree}" if candidate.worktree is not None else " (no registered worktree)")
+            + f" via keys {sorted(keys & candidate.keys)}"
             for candidate in matches
         )
         fail(f"multiple gen-* branches matched {raw_op}; normalized keys {sorted(keys)} matched: {found}")
