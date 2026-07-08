@@ -42,7 +42,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--op", required=True)
     parser.add_argument("--op-id", required=True)
     parser.add_argument("--module", required=True)
-    parser.add_argument("--is-aten", choices=("true", "false"), default="true")
+    parser.add_argument("--is-aten", choices=("true", "false"), required=True)
     parser.add_argument("--labels", default="")
     parser.add_argument("--yaml-description", default="")
     parser.add_argument("--repo-root", type=Path, required=True)
@@ -114,10 +114,9 @@ def main() -> None:
         str(gen_worktree),
         "--repo-dir",
         str(pr_worktree),
+        "--is-aten",
+        args.is_aten,
     ]
-    if args.is_aten == "false":
-        extract_cmd.append("--non-aten")
-        extract_cmd.extend(["--yaml-for", args.op_id])
     for label in [item.strip() for item in args.labels.split(",") if item.strip()]:
         extract_cmd.extend(["--yaml-label", label])
     if args.yaml_description:

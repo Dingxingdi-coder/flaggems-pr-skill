@@ -4,6 +4,9 @@ Use this checklist to enrich your workflow todos and verify the work:
 
 - Locate the target implementation, accuracy test, benchmark, and registration-adjacent files.
 - Before repairing implementation, tests, or benchmarks, branch on `IS_ATEN`. For `IS_ATEN=true`, confirm the resolved target has an exact `torch.ops.aten` schema. For `IS_ATEN=false`, confirm the prompt provides an explicitly documented fused/custom target, public API, and PyTorch reference expression. If the required target evidence is missing, block immediately, report the evidence and closest candidate schemas or references for human repair, and do not retarget to the nearest ATen schema automatically.
+- Resolver and extraction source-metadata failures are main-agent responsibilities before this stage. If this stage still sees unresolved identity metadata, block and report the missing evidence instead of repairing resolver or extraction inputs.
+- Check whether the raw operator name, module name, public operator id, and exported wrapper names require a naming adjustment that cannot be derived mechanically.
+- Check whether tests or benchmarks reveal a PyTorch reference target, alias, or wrapper relationship that should change the submitted operator scope.
 - Check for duplicate or dead generated functions and identify only code that is unrelated to the target operator or provably unused.
 - Check wrapper dtype guards and unsupported dtype behavior against the implemented kernel and tests.
 - Check generated comments for stale hardcoded assumptions.
@@ -11,5 +14,6 @@ Use this checklist to enrich your workflow todos and verify the work:
 - Check public wrappers for unimplemented stubs before registering or exporting them.
 - Check accuracy tests for meaningful reference behavior, including NaN or statistical behavior when the operator semantics require it.
 - Check benchmark subclasses and input generation before changing benchmark code.
+- If the generated worktree lacks extractable target tests or benchmarks, repair the generated validation files for the real target operator instead of depending on generated fixtures.
 - For fused or custom operators, check for a concrete downstream model or framework use case.
 - For inplace operators, check PyTorch return-alias semantics and device behavior.

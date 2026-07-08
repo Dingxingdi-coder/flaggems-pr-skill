@@ -4,7 +4,7 @@ description: Submit initial FlagGems NVIDIA general operator PRs from generated 
 ---
 # FlagGems Initial Operator PR Submission
 
-You are the main agent. Your role is orchestration only: infer shared context, resolve generated worktree context, assign GPU slots, dispatch subagents, run the deterministic PR-worktree preparation script, collect results, and stop on blockers. All implementation, validation, registration, and final draft PR creation work is performed by subagents.
+You are the main agent. Your role is orchestration and source-metadata gating: infer shared context, resolve generated worktree context, repair generated-worktree source metadata when resolver or extraction cannot identify the target, assign GPU slots, dispatch subagents, run the deterministic PR-worktree preparation script, collect results, and stop on blockers. Implementation, validation, registration, and final draft PR creation work is performed by subagents.
 
 ## Rule Model
 
@@ -18,7 +18,7 @@ Soft constraints require semantic judgment about code, reviewer intent, test beh
 
 Before dispatching any subagent, replace every `{...}` placeholder in the relevant template.
 
-The main agent must not do subagent work or read stage-specific subagent reference files. When dispatching a subagent, remind it to stay within its assigned stage and not perform other stages' duties.
+The main agent must not do subagent implementation, validation, registration, or PR drafting work, and must not read stage-specific subagent reference files during the normal workflow. Source-metadata repair needed for resolver or extraction is main-agent work, not subagent work. When dispatching a subagent, remind it to stay within its assigned stage and not perform other stages' duties.
 
 All workflow shell commands, including main-agent commands, must run through `docker exec "{CONTAINER}"` unless the user explicitly says otherwise. For Python, pytest, and benchmark commands inside Docker, subagents must use the assigned worktree's virtual environment Python, such as `{GEN_WORKTREE}/.venv/bin/python -m ...` or `{PR_WORKTREE}/.venv/bin/python -m ...`.
 
@@ -31,9 +31,9 @@ Do not skip stages, invent benchmark results, or fabricate multi-backend data.
 You MUST create a task for each of these items and complete them in order:
 
 - [ ] **Step 0: Gather Context** — determine available GPU slots, confirm a GitHub token is available, collect raw operator names and infer repository and worktree roots. Stop if any context is missing.
-- [ ] **Step 1: Resolve Operator Context** — for each raw operator, run the context resolver; if it fails, stop that operator and report the error.
+- [ ] **Step 1: Resolve Operator Context** — for each raw operator, run the context resolver; if it fails because source metadata is missing or inconsistent, locate the generated worktree, repair only the source metadata needed to identify the target, rerun the resolver, and stop that operator if the resolver still fails.
 - [ ] **Step 2: Implementation Review and Worktree Validation** — dispatch `implementation-review` and `worktree-test-benchmark`; block on failure.
-- [ ] **Step 3: Prepare PR Worktree** — main agent runs the deterministic clean PR worktree script; block on failure.
+- [ ] **Step 3: Prepare PR Worktree** — main agent runs the deterministic clean PR worktree script; if extraction fails because source metadata is missing or inconsistent, repair only the generated-worktree source metadata needed for extraction, rerun the failed command, and block if it still fails.
 - [ ] **Step 4: Register and Final Validation** — dispatch `register` and `final-validation`; block on failure.
 
 ## Workflow
@@ -57,7 +57,17 @@ For each raw operator, run the resolver before dispatching any subagent:
 docker exec "{CONTAINER}" bash -lc 'python "{skill_root}/scripts/name-worktree/resolve_op_context.py" --raw-op "{raw_op}" --worktree-root "{worktree_root}"'
 ```
 
-If the resolver exits nonzero or cannot complete exactly as invoked above, stop that operator immediately and report the command, error, and required user input or repair direction.
+If the resolver exits nonzero or cannot complete exactly as invoked above, the main agent must first determine whether this is a generated-worktree source-metadata problem before stopping. Do not dispatch a subagent while the resolver is failing.
+
+For resolver failures, perform this main-agent repair gate:
+
+1. Locate the candidate generated worktree from git `gen-*` branches, registered worktrees, and directories under `{worktree_root}`. If no candidate or multiple candidates match `{raw_op}`, stop that operator and report the command, error, candidates, and required user input.
+2. Inspect only target-identification surfaces in that generated worktree: `conf/operators.yaml`, `src/flag_gems/__init__.py`, `src/flag_gems/ops/__init__.py`, candidate files under `src/flag_gems/ops/`, target pytest marks and test names, target benchmark entries, and `torch.ops.aten` overload names. This inspection is for identity metadata only.
+3. If the resolver could not classify `{raw_op}` and the inspection identifies a single corresponding operator identity, rerun the resolver with that corresponding operator as `{raw_op}` before repairing metadata or stopping. Preserve the resolver output and report any upstream-conflict evidence it prints.
+4. If the generated worktree has a single supported target identity but missing or inconsistent source metadata, repair that metadata in `{GEN_WORKTREE}`. Valid main-agent repairs are limited to metadata and naming needed by resolver or extraction: YAML operator entries, labels, descriptions, `for` targets, public API/reference metadata for non-ATen targets, import/export/registration names, target source filename, pytest marks or test function names, and benchmark operator names. Do not rewrite kernel algorithms, validation logic, benchmark methodology, registration policy, or PR text in this gate.
+5. For ATen targets, the repaired metadata must identify an exact `torch.ops.aten` schema or overload. Do not retarget to the nearest ATen schema automatically when evidence is ambiguous; report the closest candidate schemas and stop for human repair.
+6. For non-ATen targets, the repaired metadata must provide an explicitly documented fused/custom target, exported public API, PyTorch reference expression, non-`aten` labels, and description. If a concrete downstream use case or reference cannot be established, stop for human repair.
+7. Rerun the resolver exactly as invoked above after each repair. If it still exits nonzero, stop that operator and report the command, error, what was inspected or repaired, and the required user input or repair direction.
 
 If the resolver reports that upstream already contains the operator, also report any `UPSTREAM_PR_URL`, `UPSTREAM_COMMIT`, and `UPSTREAM_EVIDENCE` lines it prints.
 
@@ -96,7 +106,7 @@ docker exec "{CONTAINER}" bash -lc 'python "{skill_root}/scripts/prepare-pr-work
   --upstream-ref "{UPSTREAM_REF}"'
 ```
 
-If this command exits nonzero or cannot complete exactly as invoked above, stop that operator immediately and report the command, error, and required user input or repair direction.
+If this command exits nonzero or cannot complete exactly as invoked above, the main agent must first determine whether extraction failed because generated-worktree source metadata is missing or inconsistent. If so, repair only the metadata and naming surfaces listed in the resolver repair gate, rerun the same prepare command, and stop the operator if the command still fails. If the failure is not a source-metadata or target-identification failure, stop that operator immediately and report the command, error, and required user input or repair direction.
 
 The command must output `{PR_BRANCH}`, `{PR_WORKTREE}`, and `{TARGET_FILES}`. Use these values for all later stages.
 

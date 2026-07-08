@@ -10,6 +10,7 @@
 - Use only the real validation dataset provided by the main agent and facts from the PR worktree; never infer or fabricate validation data.
 - Do not create a PR when exported functions lack matching test and benchmark coverage.
 - Do not create a PR when the benchmark compares non-equivalent torch and FlagGems work.
+- Do not create a PR when yaml metadata was guessed by a script instead of being derived from target semantics and upstream taxonomy.
 - If pre-commit modifies files during commit, re-stage only the explicit target files, re-check that the staged file list is target-only, and retry the commit.
 - Push the PR branch to the fork remote before creating the PR.
 - Create a draft PR by default; create a non-draft PR only when the user explicitly requests it.

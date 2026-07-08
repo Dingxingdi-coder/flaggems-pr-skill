@@ -28,7 +28,11 @@ Workflow:
 5. Before validation, run a one-time import-origin check from `{PR_WORKTREE}` with `{PR_WORKTREE}/.venv/bin/python` and block if `flag_gems.__file__` does not resolve under `{PR_WORKTREE}`. This check does not need to be repeated unless the container, Python environment, or command entry pattern changes.
 6. Run the static gate before staging through Docker: `docker exec "{CONTAINER}" bash -lc 'cd "{PR_WORKTREE}" && "{PR_WORKTREE}/.venv/bin/python" "{SKILL_ROOT}/scripts/general/operator_static_gate.py" --op "{OP}" --op-id "{OP_ID}" --module "{MODULE}" --base-ref "{UPSTREAM_REF}"'`
 7. Prepare the PR body from `{SKILL_ROOT}/references/final-validation/pr-body-template.md`.
-8. Through Docker, stage only `{TARGET_FILES}`, commit with exactly `git commit -m "[KernelGen][Nvidia] Add {OP_ID} operator with Triton kernel"`, push the PR branch to the fork remote with `git push origin "{PR_BRANCH}"`, and create the PR with `gh pr create --repo "flagos-ai/FlagGems-Experimental" --title "[KernelGen][Nvidia] Add {OP_ID} operator with Triton kernel"` only after all required validation data is real and complete.
+8. Through Docker, stage only `{TARGET_FILES}`, commit with exactly `git commit -m "[KernelGen][Nvidia] Add {OP_ID} operator with Triton kernel"`, push the PR branch to the fork remote using the current command environment's `GH_TOKEN` or `GITHUB_TOKEN` without persisting credentials, and create the PR with `gh pr create --repo "flagos-ai/FlagGems-Experimental" --base "infra-ci" --title "[KernelGen][Nvidia] Add {OP_ID} operator with Triton kernel"` only after all required validation data is real and complete. Use this push pattern:
+
+```bash
+docker exec "{CONTAINER}" bash -lc 'cd "{PR_WORKTREE}" && TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}" && test -n "$TOKEN" && AUTH=$(printf "x-access-token:%s" "$TOKEN" | base64 -w0) && git -c http.https://github.com/.extraheader="AUTHORIZATION: basic $AUTH" push -u origin "{PR_BRANCH}"'
+```
 9. After the main work is complete, create and complete one final todo to verify that you followed the general and final-validation soft constraints.
 
 Return the PR URL, exact validation commands, target files staged, commit hash, benchmark summary, and any blocking issue.

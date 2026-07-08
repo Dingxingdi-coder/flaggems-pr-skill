@@ -9,6 +9,7 @@
 - Target files, pytest marks, benchmark `op_name`, yaml id, ops package exports, and top-level dispatch registration must describe the same public operator id.
 - Keep new entries in `conf/operators.yaml`, `src/flag_gems/__init__.py`, and `src/flag_gems/ops/__init__.py` in the surrounding sorted order.
 - When a target operator is an alias or overload of an existing FlagGems implementation, register and cover the existing implementation instead of adding duplicate wrappers, kernels, tests, or benchmarks.
+- Do not let extraction scripts synthesize yaml metadata such as labels, kind, stages, descriptions, `for` targets, or inplace entries; populate them from upstream taxonomy and target semantics.
 - Place non-ATen fused operators under `src/flag_gems/fused` when they are model/framework fusions. Non-ATen public math or reduction APIs may remain under `src/flag_gems/ops` when that matches the current upstream taxonomy. Keep ATen overrides under `src/flag_gems/ops`.
 - Populate `conf/operators.yaml` labels, kind, stages, and `for` entries from the current upstream taxonomy for the actual public Torch or fused operator.
 - Use lower snake-case public operator ids for generated fused or custom operators unless the upstream taxonomy requires a different spelling.

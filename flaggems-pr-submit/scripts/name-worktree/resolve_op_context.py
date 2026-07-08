@@ -15,25 +15,6 @@ from pathlib import Path
 import yaml
 
 
-SPECIAL_OPS = {
-    "ReduceL2": ("reduce_l2", "reduce_l2"),
-    "reduce_l2": ("reduce_l2", "reduce_l2"),
-    "max_pool2d_with_indices_backward": ("max_pool2d_with_indices", "max_pool2d_with_indices_backward"),
-    "matmul_layer_norm": ("Matmul_Layer_Norm", "matmul_layernorm"),
-    "__and__": ("_and_", "and_op"),
-}
-
-NON_ATEN_TARGETS = {
-    "reduce_l2": {
-        "public_api": "flag_gems.reduce_l2",
-        "reference": "torch.linalg.vector_norm",
-        "reference_args": "ord=2, dim=None, keepdim=False",
-        "labels": "KernelGen,reduction,experimental",
-        "description": "Computes the global L2 norm of the input tensor.",
-    },
-}
-
-
 def fail(message: str) -> None:
     print(f"ERROR: {message}", file=sys.stderr)
     raise SystemExit(1)
@@ -89,8 +70,6 @@ def is_dunder_operator(op: str) -> bool:
 
 
 def resolve_module_and_id(op: str) -> tuple[str, str]:
-    if op in SPECIAL_OPS:
-        return SPECIAL_OPS[op]
     module = op.rstrip("_") if op.endswith("_") and not is_dunder_operator(op) else op
     return module, op.lstrip("_")
 
@@ -115,7 +94,7 @@ class OperatorContext:
     op: str
     op_id: str
     module: str
-    is_aten: bool = True
+    is_aten: bool
     public_api: str = ""
     reference: str = ""
     reference_args: str = ""
@@ -127,14 +106,11 @@ class OperatorContext:
 class YamlCandidate:
     op_id: str
     keys: set[str]
-
-
-@dataclass(frozen=True)
-class CanonicalTarget:
-    module: str
-    op_id: str
-    path: Path
-    evidence: str
+    for_values: tuple[str, ...]
+    labels: tuple[str, ...]
+    description: str
+    reference: str
+    reference_args: str
 
 
 def branch_for(worktree: Path) -> str | None:
@@ -241,8 +217,67 @@ def yaml_candidates(worktree: Path, keys: set[str]) -> list[YamlCandidate]:
         if keys & candidate_keys:
             op_id = str(entry.get("id") or entry.get("name") or next(iter(entry.get("for") or []), "")).strip()
             if op_id:
-                candidates.append(YamlCandidate(op_id=op_id, keys=candidate_keys))
+                for_values = tuple(str(name).strip() for name in (entry.get("for") or []) if str(name).strip())
+                labels = tuple(str(label).strip() for label in (entry.get("labels") or []) if str(label).strip())
+                description = str(entry.get("description") or "").strip()
+                reference = str(entry.get("reference") or "").strip()
+                reference_args = str(entry.get("reference_args") or "").strip()
+                candidates.append(
+                    YamlCandidate(
+                        op_id=op_id,
+                        keys=candidate_keys,
+                        for_values=for_values,
+                        labels=labels,
+                        description=description,
+                        reference=reference,
+                        reference_args=reference_args,
+                    )
+                )
     return candidates
+
+
+def aten_schema_exists(name: str) -> bool:
+    text = strip_aten(name)
+    if not text:
+        return False
+    op_name, sep, overload = text.partition(".")
+    if not sep:
+        overload = ""
+
+    try:
+        import torch
+
+        packet = getattr(torch.ops.aten, op_name)
+        overloads = set(packet.overloads())
+    except Exception:
+        return False
+
+    if overload:
+        return overload in overloads
+    return bool(overloads)
+
+
+def exported_public_api(worktree: Path, op_id: str) -> str:
+    init_path = worktree / "src/flag_gems/__init__.py"
+    if not init_path.is_file():
+        return ""
+
+    try:
+        tree = ast.parse(init_path.read_text())
+    except SyntaxError:
+        return ""
+
+    target = normalize_name(op_id)
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom) or not node.module:
+            continue
+        if not node.module.startswith("flag_gems.ops"):
+            continue
+        for alias in node.names:
+            public_name = alias.asname or alias.name
+            if normalize_name(public_name) == target:
+                return f"flag_gems.{public_name}"
+    return ""
 
 
 def module_imports(worktree: Path) -> dict[str, str]:
@@ -276,278 +311,39 @@ def resolve_operator_context(worktree: Path, raw_op: str, branch_op: str) -> Ope
     op_id = candidates[0].op_id if candidates else fallback_op_id
     imports = module_imports(worktree)
     module = imports.get(op_id) or fallback_module
-    metadata = NON_ATEN_TARGETS.get(normalize_name(op_id)) or NON_ATEN_TARGETS.get(normalize_name(module))
-    if metadata:
+    labels = candidates[0].labels if candidates else ()
+    description = candidates[0].description if candidates else ""
+    reference = candidates[0].reference if candidates else ""
+    reference_args = candidates[0].reference_args if candidates else ""
+    schema_names = (op_id, module, branch_op, *(candidates[0].for_values if candidates else ()))
+    if any(aten_schema_exists(schema_name) for schema_name in schema_names):
+        return OperatorContext(
+            op=branch_op,
+            op_id=op_id,
+            module=module,
+            is_aten=True,
+            labels=",".join(labels),
+            description=description,
+        )
+
+    public_api = exported_public_api(worktree, op_id)
+    if labels and "aten" not in {label.casefold() for label in labels} and description and public_api and reference:
         return OperatorContext(
             op=branch_op,
             op_id=op_id,
             module=module,
             is_aten=False,
-            public_api=metadata["public_api"],
-            reference=metadata["reference"],
-            reference_args=metadata["reference_args"],
-            labels=metadata["labels"],
-            description=metadata["description"],
+            public_api=public_api,
+            reference=reference,
+            reference_args=reference_args,
+            labels=",".join(labels),
+            description=description,
         )
-    return OperatorContext(op=branch_op, op_id=op_id, module=module)
 
-
-def imported_flaggems_op_targets(tree: ast.AST) -> dict[str, tuple[str, str]]:
-    targets: dict[str, tuple[str, str]] = {}
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.ImportFrom) or node.level:
-            continue
-        if node.module == "flag_gems.ops":
-            for alias in node.names:
-                if alias.name == "*":
-                    continue
-                local_name = alias.asname or alias.name
-                targets[local_name] = (alias.name, alias.name)
-            continue
-        prefix = "flag_gems.ops."
-        if not node.module or not node.module.startswith(prefix):
-            continue
-        module = node.module.removeprefix(prefix)
-        if not module or "." in module:
-            continue
-        for alias in node.names:
-            if alias.name == "*":
-                continue
-            local_name = alias.asname or alias.name
-            targets[local_name] = (module, alias.name)
-    return targets
-
-
-def is_docstring_statement(statement: ast.stmt) -> bool:
-    return (
-        isinstance(statement, ast.Expr)
-        and isinstance(statement.value, ast.Constant)
-        and isinstance(statement.value.value, str)
-    )
-
-
-def is_logger_statement(statement: ast.stmt) -> bool:
-    if not isinstance(statement, ast.Expr) or not isinstance(statement.value, ast.Call):
-        return False
-    func = statement.value.func
-    return (
-        isinstance(func, ast.Attribute)
-        and isinstance(func.value, ast.Name)
-        and func.value.id in {"logger", "logging"}
-    )
-
-
-def direct_return_call_name(function: ast.FunctionDef) -> str | None:
-    return_names: list[str] = []
-    for index, statement in enumerate(function.body):
-        if index == 0 and is_docstring_statement(statement):
-            continue
-        if is_logger_statement(statement):
-            continue
-        if not isinstance(statement, ast.Return):
-            return None
-        call = statement.value
-        if not isinstance(call, ast.Call) or not isinstance(call.func, ast.Name):
-            return None
-        return_names.append(call.func.id)
-    if len(return_names) != 1:
-        return None
-    return return_names[0]
-
-
-def op_key_matches_text(keys: set[str], text: object) -> bool:
-    normalized = normalize_name(text)
-    compact = compact_name_key(text)
-    tokens = {token for token in normalized.split("_") if token}
-    tokens.update(compact_name_key(token) for token in tokens)
-    return normalized in keys or compact in keys or bool(tokens & keys)
-
-
-def attr_chain(node: ast.AST) -> list[str]:
-    if isinstance(node, ast.Name):
-        return [node.id]
-    if isinstance(node, ast.Attribute):
-        return [*attr_chain(node.value), node.attr]
-    return []
-
-
-def torch_op_name(node: ast.AST) -> str | None:
-    if isinstance(node, ast.Call):
-        node = node.func
-    chain = attr_chain(node)
-    if len(chain) == 2 and chain[0] == "torch":
-        return chain[1]
-    if len(chain) == 4 and chain[:3] == ["torch", "nn", "functional"]:
-        return chain[3]
-    return None
-
-
-def target_names(node: ast.AST) -> list[str]:
-    if isinstance(node, ast.Name):
-        return [node.id]
-    if isinstance(node, (ast.Tuple, ast.List)):
-        names: list[str] = []
-        for element in node.elts:
-            names.extend(target_names(element))
-        return names
-    if isinstance(node, ast.Attribute):
-        return [node.attr]
-    return []
-
-
-def is_reference_assignment(statement: ast.stmt) -> bool:
-    targets: list[str] = []
-    if isinstance(statement, ast.Assign):
-        for target in statement.targets:
-            targets.extend(target_names(target))
-    elif isinstance(statement, ast.AnnAssign):
-        targets.extend(target_names(statement.target))
-    else:
-        return False
-    return any("ref" in name.casefold() or "expect" in name.casefold() for name in targets)
-
-
-def assigned_value(statement: ast.stmt) -> ast.AST | None:
-    if isinstance(statement, ast.Assign):
-        return statement.value
-    if isinstance(statement, ast.AnnAssign):
-        return statement.value
-    return None
-
-
-def function_mentions_flaggems_op(function: ast.FunctionDef, keys: set[str]) -> bool:
-    for node in ast.walk(function):
-        if not isinstance(node, ast.Call):
-            continue
-        chain = attr_chain(node.func)
-        if len(chain) == 2 and chain[0] == "flag_gems" and op_key_matches_text(keys, chain[1]):
-            return True
-    return False
-
-
-def is_context_function(function: ast.FunctionDef, keys: set[str]) -> bool:
-    if op_key_matches_text(keys, function.name):
-        return True
-    for decorator in function.decorator_list:
-        chain = attr_chain(decorator)
-        if chain and op_key_matches_text(keys, chain[-1]):
-            return True
-    return function_mentions_flaggems_op(function, keys)
-
-
-def string_value(node: ast.AST) -> str | None:
-    return node.value if isinstance(node, ast.Constant) and isinstance(node.value, str) else None
-
-
-def collect_reference_targets_from_python(source_path: Path, context: OperatorContext) -> set[tuple[str, str]]:
-    try:
-        tree = ast.parse(source_path.read_text())
-    except SyntaxError:
-        return set()
-
-    keys = identity_name_keys(context.op, context.op_id, context.module)
-    targets: set[tuple[str, str]] = set()
-
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.FunctionDef) or not is_context_function(node, keys):
-            continue
-        for statement in ast.walk(node):
-            if isinstance(statement, (ast.Assign, ast.AnnAssign)) and is_reference_assignment(statement):
-                op_name = torch_op_name(assigned_value(statement))
-                if op_name:
-                    targets.add(resolve_module_and_id(op_name))
-            if isinstance(statement, ast.Call):
-                call_chain = attr_chain(statement.func)
-                if call_chain and call_chain[-1] == "UnaryReductionBenchmark":
-                    op_name_value = None
-                    torch_op_value = None
-                    for keyword in statement.keywords:
-                        if keyword.arg == "op_name":
-                            op_name_value = string_value(keyword.value)
-                        elif keyword.arg == "torch_op":
-                            torch_op_value = torch_op_name(keyword.value)
-                    if op_name_value and torch_op_value and op_key_matches_text(keys, op_name_value):
-                        targets.add(resolve_module_and_id(torch_op_value))
-
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Tuple) or len(node.elts) < 2:
-            continue
-        op_name_value = string_value(node.elts[0])
-        torch_op_value = torch_op_name(node.elts[1])
-        if op_name_value and torch_op_value and op_key_matches_text(keys, op_name_value):
-            targets.add(resolve_module_and_id(torch_op_value))
-
-    return targets
-
-
-def detect_reference_target(worktree: Path, context: OperatorContext) -> CanonicalTarget | None:
-    roots = [worktree / "tests", worktree / "benchmark"]
-    candidates: dict[tuple[str, str], Path] = {}
-    for root in roots:
-        if not root.is_dir():
-            continue
-        for source_path in root.rglob("*.py"):
-            for target in collect_reference_targets_from_python(source_path, context):
-                if identity_name_keys(*target) == identity_name_keys(context.module, context.op_id):
-                    continue
-                candidates.setdefault(target, source_path)
-
-    if len(candidates) > 1:
-        found = ", ".join(f"{module}.{op_id}" for module, op_id in sorted(candidates))
-        fail(f"multiple torch reference targets detected for {context.op_id}: {found}")
-    if not candidates:
-        return None
-
-    (module, op_id), source_path = next(iter(candidates.items()))
-    return CanonicalTarget(
-        module=module,
-        op_id=op_id,
-        path=source_path,
-        evidence=f"{source_path}: {context.op_id} uses torch.{op_id} as its reference operator",
-    )
-
-
-def detect_direct_wrapper_target(worktree: Path, module: str, op_id: str) -> CanonicalTarget | None:
-    source_path = worktree / f"src/flag_gems/ops/{module}.py"
-    if not source_path.is_file():
-        return None
-
-    try:
-        tree = ast.parse(source_path.read_text())
-    except SyntaxError as exc:
-        fail(f"cannot parse {source_path}: {exc}")
-
-    imports = imported_flaggems_op_targets(tree)
-    if not imports:
-        return None
-
-    function_keys = identity_name_keys(module, op_id)
-    targets: set[tuple[str, str]] = set()
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.FunctionDef):
-            continue
-        if normalize_name(node.name) not in function_keys and compact_name_key(node.name) not in function_keys:
-            continue
-        local_name = direct_return_call_name(node)
-        if local_name is None or local_name not in imports:
-            continue
-        target_module, target_op_id = imports[local_name]
-        if identity_name_keys(target_module, target_op_id) == identity_name_keys(module, op_id):
-            continue
-        targets.add((target_module, target_op_id))
-
-    if len(targets) > 1:
-        found = ", ".join(f"{target_module}.{target_op_id}" for target_module, target_op_id in sorted(targets))
-        fail(f"multiple direct wrapper targets detected for {op_id} in {source_path}: {found}")
-    if not targets:
-        return None
-
-    target_module, target_op_id = next(iter(targets))
-    return CanonicalTarget(
-        module=target_module,
-        op_id=target_op_id,
-        path=source_path,
-        evidence=f"{source_path}: {op_id} directly returns {target_op_id}(...)",
+    evidence = ", ".join(str(name) for name in schema_names if str(name).strip())
+    fail(
+        f"cannot classify {raw_op} as ATen or non-ATen; no exact torch.ops.aten schema found "
+        f"for [{evidence}], and generic non-ATen metadata is incomplete"
     )
 
 
@@ -744,51 +540,6 @@ def fail_if_upstream_has_raw_op(worktree: Path, raw_op: str, upstream: str, base
         )
 
 
-def canonical_conflict_details(details: dict[str, str], context: OperatorContext, target: CanonicalTarget) -> dict[str, str]:
-    result = {
-        "CANONICAL_EVIDENCE": target.evidence,
-    }
-    result.update(details)
-    return result
-
-
-def fail_if_upstream_has_canonical_target(
-    worktree: Path,
-    base_ref: str,
-    context: OperatorContext,
-    target: CanonicalTarget,
-    remote: str,
-) -> None:
-    kernel_path = f"src/flag_gems/ops/{target.module}.py"
-    if upstream_has_yaml_id(worktree, base_ref, target.op_id):
-        fail_upstream(
-            f"{context.op_id} maps to upstream yaml id {target.op_id}",
-            canonical_conflict_details(
-                upstream_yaml_conflict_details(worktree, base_ref, target.op_id, target.module, remote),
-                context,
-                target,
-            ),
-        )
-    if upstream_has_registered_op(worktree, base_ref, target.op_id):
-        fail_upstream(
-            f"{context.op_id} maps to upstream operator {target.op_id}",
-            canonical_conflict_details(
-                operator_source_details(worktree, base_ref, target.op_id, target.module, remote),
-                context,
-                target,
-            ),
-        )
-    if upstream_has_path(worktree, base_ref, kernel_path):
-        fail_upstream(
-            f"{context.op_id} maps to upstream {kernel_path}",
-            canonical_conflict_details(
-                operator_source_details(worktree, base_ref, target.op_id, target.module, remote),
-                context,
-                target,
-            ),
-        )
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--raw-op", required=True)
@@ -813,12 +564,6 @@ def main() -> None:
     base_ref = f"refs/remotes/{args.upstream}/{args.base_branch}"
     if args.check_upstream:
         base_ref = fetch_upstream(worktree, args.upstream, args.base_branch)
-
-    wrapper_target = detect_direct_wrapper_target(worktree, context.module, context.op_id)
-    if wrapper_target is None:
-        wrapper_target = detect_reference_target(worktree, context)
-    if args.check_upstream and wrapper_target is not None:
-        fail_if_upstream_has_canonical_target(worktree, base_ref, context, wrapper_target, args.upstream)
 
     kernel_path = f"src/flag_gems/ops/{context.module}.py"
     if args.check_upstream:
