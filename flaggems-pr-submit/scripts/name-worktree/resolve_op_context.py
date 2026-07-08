@@ -69,8 +69,12 @@ def is_dunder_operator(op: str) -> bool:
     return op.startswith("__") and op.endswith("__")
 
 
+def is_trailing_underscore_operator(op: str) -> bool:
+    return op.endswith("_") and not is_dunder_operator(op)
+
+
 def resolve_module_and_id(op: str) -> tuple[str, str]:
-    module = op.rstrip("_") if op.endswith("_") and not is_dunder_operator(op) else op
+    module = op.rstrip("_") if is_trailing_underscore_operator(op) else op
     return module, op.lstrip("_")
 
 
@@ -126,6 +130,8 @@ def query_keys_for(op: str) -> set[str]:
 
 
 def identity_keys_for(op: str) -> set[str]:
+    if is_trailing_underscore_operator(op):
+        return {normalize_name(op)}
     _module, op_id = resolve_module_and_id(op)
     return identity_name_keys(op, op_id)
 
@@ -301,7 +307,10 @@ def module_imports(worktree: Path) -> dict[str, str]:
 
 def resolve_operator_context(worktree: Path, raw_op: str, branch_op: str) -> OperatorContext:
     fallback_module, fallback_op_id = resolve_module_and_id(branch_op)
-    keys = query_keys_for(raw_op) | query_keys_for(branch_op)
+    if is_trailing_underscore_operator(raw_op):
+        keys = {normalize_name(raw_op)}
+    else:
+        keys = query_keys_for(raw_op) | query_keys_for(branch_op)
     candidates = yaml_candidates(worktree, keys)
 
     if len(candidates) > 1:
