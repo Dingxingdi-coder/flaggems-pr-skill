@@ -64,7 +64,7 @@ If the resolver reports that upstream already contains the operator, also report
 After resolving each operator context and before dispatching subagents for `{GEN_WORKTREE}`, create or refresh a worktree-local virtual environment:
 
 ```bash
-cd "{GEN_WORKTREE}" && python -m venv --system-site-packages .venv && .venv/bin/python -m pip install -e .
+cd "{GEN_WORKTREE}" && python -m venv --system-site-packages .venv && unset PIP_CONSTRAINT && PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/ .venv/bin/python -m pip install -e .
 ```
 
 ### Implementation Review and Worktree Validation
@@ -98,7 +98,7 @@ The command must output `{PR_BRANCH}`, `{PR_WORKTREE}`, and `{TARGET_FILES}`. Us
 After the PR worktree is prepared and before dispatching subagents for `{PR_WORKTREE}`, create or refresh a worktree-local virtual environment:
 
 ```bash
-cd "{PR_WORKTREE}" && python -m venv --system-site-packages .venv && .venv/bin/python -m pip install -e .
+cd "{PR_WORKTREE}" && python -m venv --system-site-packages .venv && unset PIP_CONSTRAINT && PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/ .venv/bin/python -m pip install -e .
 ```
 
 ### Register and Final Validation

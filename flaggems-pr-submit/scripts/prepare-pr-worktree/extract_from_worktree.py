@@ -294,6 +294,60 @@ def extract_function_block(content, func_name):
     return "\n".join(lines[decorator_start:func_end])
 
 
+def collect_top_level_defs(content):
+    """Return top-level helper functions/classes keyed by name."""
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return {}
+
+    definitions = {}
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            block = extract_function_block(content, node.name)
+            if block:
+                definitions[node.name] = block
+    return definitions
+
+
+def collect_used_names(block):
+    """Collect loaded names from a source block."""
+    try:
+        tree = ast.parse(block)
+    except SyntaxError:
+        return set()
+
+    used = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+            used.add(node.id)
+    return used
+
+
+def prepend_local_dependencies(content, blocks, exclude_names):
+    """Prepend top-level helpers referenced by selected blocks."""
+    definitions = collect_top_level_defs(content)
+    selected_names = set(exclude_names)
+    used = set()
+    for block in blocks:
+        used.update(collect_used_names(block))
+
+    dep_blocks = []
+    while True:
+        added = False
+        for name, block in definitions.items():
+            if name in selected_names or name not in used:
+                continue
+            dep_blocks.append(block)
+            selected_names.add(name)
+            used.update(collect_used_names(block))
+            added = True
+        if not added:
+            break
+
+    return dep_blocks + list(blocks)
+
+
 def convert_test_imports(func_block, op):
     """Convert direct accuracy_utils imports to `utils.` prefix style."""
     op_id = get_op_id(op)
@@ -326,6 +380,7 @@ def convert_test_imports(func_block, op):
     for sym in UTILS_SYMBOLS:
         # Only replace bare occurrences (not already prefixed)
         result = re.sub(rf"(?<!\.)(?<!\w){re.escape(sym)}\b", f"utils.{sym}", result)
+    result = re.sub(r"(?<!utils\.)(?<!\w)init_seed\b", "utils.init_seed", result)
 
     # Replace device reference
     result = result.replace("device=device", "device=flag_gems.device")
@@ -378,6 +433,8 @@ def extract_test(op, worktree, repo, dry_run):
     if not blocks:
         fatal(f"无法提取函数 {func_name}")
 
+    blocks = prepend_local_dependencies(content, blocks, all_funcs)
+    blocks = [convert_test_imports(block, op) for block in blocks]
     combined_blocks = "\n\n\n".join(blocks)
 
     extra_imports = ""
@@ -385,6 +442,15 @@ def extract_test(op, worktree, repo, dry_run):
         extra_imports += "import random\n"
     if re.search(r"\bmath\.", combined_blocks):
         extra_imports += "import math\n"
+    if re.search(r"\bos\.", combined_blocks):
+        extra_imports += "import os\n"
+    if re.search(r"\bAny\b|\bList\b|\bOptional\b|\bTuple\b", combined_blocks):
+        typing_names = [
+            name
+            for name in ("Any", "List", "Optional", "Tuple")
+            if re.search(rf"\b{name}\b", combined_blocks)
+        ]
+        extra_imports += f"from typing import {', '.join(typing_names)}\n"
 
     test_content = (
         f"{extra_imports}"
@@ -511,6 +577,23 @@ def extract_benchmark_block(content, op, source_file):
                 insert_idx = 1 if blocks and blocks[0][0] == "class" else 0
                 blocks.insert(insert_idx, ("input_fn", block))
                 existing_funcs.add(fn_name)
+
+        selected_names = set(existing_classes) | existing_funcs
+        selected_names.update(
+            re.search(r"def\s+(\w+)", b).group(1)
+            for t, b in blocks
+            if t == "test" and isinstance(b, str) and re.search(r"def\s+(\w+)", b)
+        )
+        selected = [b for _, b in blocks if isinstance(b, str)]
+        with_deps = prepend_local_dependencies(content, selected, selected_names)
+        if len(with_deps) > len(selected):
+            existing_text = "\n\n".join(selected)
+            for dep in with_deps[: len(with_deps) - len(selected)]:
+                if dep in existing_text:
+                    continue
+                dep_type = "class" if dep.lstrip().startswith("class ") else "input_fn"
+                insert_idx = 1 if blocks and blocks[0][0] == "class" else 0
+                blocks.insert(insert_idx, (dep_type, dep))
 
     return blocks
 
@@ -1174,7 +1257,8 @@ def insert_full_config(op, worktree, repo, dry_run):
                         config_entries.append(line_stripped.rstrip(",") + ",")
 
     if not config_entries:
-        fatal(f"worktree _FULL_CONFIG 中未找到 {op} 的条目")
+        warn(f"worktree _FULL_CONFIG 中未找到 {op} 的条目，跳过 _FULL_CONFIG 更新")
+        return
 
     for entry in config_entries:
         ok(f"配置: {entry}")
