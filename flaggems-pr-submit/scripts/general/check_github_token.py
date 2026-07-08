@@ -18,7 +18,7 @@ def main() -> None:
             return
 
     print(
-        "ERROR: GitHub token is required; set GH_TOKEN or GITHUB_TOKEN in the agent environment and do not paste or print the token.",
+        "ERROR: GitHub token is required; set GH_TOKEN or GITHUB_TOKEN in the current command environment and do not paste or print the token.",
         file=sys.stderr,
     )
     raise SystemExit(1)

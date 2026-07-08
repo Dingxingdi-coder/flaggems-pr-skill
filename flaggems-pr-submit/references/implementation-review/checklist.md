@@ -3,6 +3,7 @@
 Use this checklist to enrich your workflow todos and verify the work:
 
 - Locate the target implementation, accuracy test, benchmark, and registration-adjacent files.
+- Before repairing implementation, tests, or benchmarks, confirm the resolved target has an exact `torch.ops.aten` schema or an explicitly documented fused/custom target. If no exact target exists, block immediately, report the evidence and closest candidate schemas for human repair, and do not retarget to the nearest ATen schema automatically.
 - Check for duplicate or dead generated functions and identify only code that is unrelated to the target operator or provably unused.
 - Check wrapper dtype guards and unsupported dtype behavior against the implemented kernel and tests.
 - Check generated comments for stale hardcoded assumptions.
