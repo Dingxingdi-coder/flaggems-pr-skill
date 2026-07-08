@@ -315,11 +315,12 @@ def pr_url_for_commit(worktree: Path, repo: str, commit: str) -> str | None:
     match = re.search(r"\(#(\d+)\)", message.stdout)
     if not match:
         return None
+    pr_number = match.group(1)
 
-    pr_view = run_gh(worktree, "pr", "view", match.group(1), "--repo", repo, "--json", "url", "--jq", ".url")
+    pr_view = run_gh(worktree, "pr", "view", pr_number, "--repo", repo, "--json", "url", "--jq", ".url")
     if pr_view.returncode == 0 and pr_view.stdout.strip():
         return pr_view.stdout.strip()
-    return None
+    return f"https://github.com/{repo}/pull/{pr_number}"
 
 
 def matching_yaml_line(text: str, op_id: str) -> int | None:
@@ -423,6 +424,28 @@ def upstream_has_registered_op(worktree: Path, base_ref: str, op_id: str) -> boo
     return False
 
 
+def fail_if_upstream_has_raw_op(worktree: Path, raw_op: str, upstream: str, base_branch: str) -> None:
+    module, op_id = resolve_module_and_id(raw_op)
+    base_ref = fetch_upstream(worktree, upstream, base_branch)
+    kernel_path = f"src/flag_gems/ops/{module}.py"
+
+    if upstream_has_yaml_id(worktree, base_ref, op_id):
+        fail_upstream(
+            f"upstream already has yaml id {op_id}",
+            upstream_yaml_conflict_details(worktree, base_ref, op_id, module, upstream),
+        )
+    if upstream_has_registered_op(worktree, base_ref, op_id):
+        fail_upstream(
+            f"upstream already registers operator {op_id}",
+            operator_source_details(worktree, base_ref, op_id, module, upstream),
+        )
+    if upstream_has_path(worktree, base_ref, kernel_path) and not (raw_op.endswith("_") and not is_dunder_operator(raw_op)):
+        fail_upstream(
+            f"upstream already has {kernel_path}",
+            operator_source_details(worktree, base_ref, op_id, module, upstream),
+        )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--raw-op", required=True)
@@ -438,6 +461,7 @@ def main() -> None:
     repo_root = (args.repo_root or args.worktree_root.parent).resolve()
     worktree_root = args.worktree_root.resolve()
     raw_op = strip_aten(args.raw_op)
+    fail_if_upstream_has_raw_op(repo_root, raw_op, args.upstream, args.base_branch)
     worktree, _branch, branch_op = resolve_worktree(repo_root, worktree_root, raw_op)
     context = resolve_operator_context(worktree, raw_op, branch_op)
     branch = check_branch(worktree, context.op, context.op_id)
