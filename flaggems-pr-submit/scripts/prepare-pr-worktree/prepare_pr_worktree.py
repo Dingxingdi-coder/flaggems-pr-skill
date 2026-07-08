@@ -42,6 +42,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--op", required=True)
     parser.add_argument("--op-id", required=True)
     parser.add_argument("--module", required=True)
+    parser.add_argument("--is-aten", choices=("true", "false"), default="true")
+    parser.add_argument("--labels", default="")
+    parser.add_argument("--yaml-description", default="")
     parser.add_argument("--repo-root", type=Path, required=True)
     parser.add_argument("--worktree-root", type=Path, required=True)
     parser.add_argument("--gen-worktree", type=Path, required=True)
@@ -99,22 +102,27 @@ def main() -> None:
 
     script_dir = Path(__file__).resolve().parent
     extract_script = script_dir / "extract_from_worktree.py"
-    run(
-        [
-            sys.executable,
-            str(extract_script),
-            args.op,
-            "--op-id",
-            args.op_id,
-            "--module",
-            args.module,
-            "--source-worktree",
-            str(gen_worktree),
-            "--repo-dir",
-            str(pr_worktree),
-        ],
-        repo_root,
-    )
+    extract_cmd = [
+        sys.executable,
+        str(extract_script),
+        args.op,
+        "--op-id",
+        args.op_id,
+        "--module",
+        args.module,
+        "--source-worktree",
+        str(gen_worktree),
+        "--repo-dir",
+        str(pr_worktree),
+    ]
+    if args.is_aten == "false":
+        extract_cmd.append("--non-aten")
+        extract_cmd.extend(["--yaml-for", args.op_id])
+    for label in [item.strip() for item in args.labels.split(",") if item.strip()]:
+        extract_cmd.extend(["--yaml-label", label])
+    if args.yaml_description:
+        extract_cmd.extend(["--yaml-description", args.yaml_description])
+    run(extract_cmd, repo_root)
 
     target_files = [template.format(module=args.module, op_id=args.op_id) for template in TARGET_FILES]
     print(f"PR_BRANCH={pr_branch}")

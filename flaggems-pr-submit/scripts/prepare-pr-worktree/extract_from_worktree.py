@@ -33,7 +33,9 @@ MODULE_NAME = ""
 CONFIG_ENTRIES = []
 YAML_FOR = []
 YAML_DESCRIPTION = ""
+YAML_LABELS = []
 STRIP_TEST_MARKS = []
+IS_ATEN = True
 
 
 def is_max_pool2d_with_indices_backward(op):
@@ -798,6 +800,28 @@ def _prefix_consts_dtypes(expr):
     return re.sub(r"(?<!consts\.)(?<!\w)([A-Z_]+_DTYPES)\b", r"consts.\1", expr)
 
 
+def _prefix_benchmark_utils(text):
+    """Prefix bare benchmark utility calls after switching to package imports."""
+    return re.sub(
+        r"(?<!utils\.)(?<!\w)generate_tensor_input\b",
+        "utils.generate_tensor_input",
+        text,
+    )
+
+
+def _normalize_benchmark_op_name(text, op_id):
+    text = re.sub(
+        rf"op_name\s*=\s*f[\"']{re.escape(op_id)}_[^\"']*[\"']",
+        f'op_name="{op_id}"',
+        text,
+    )
+    return re.sub(
+        rf"op_name\s*=\s*[\"']{re.escape(op_id)}_[^\"']*[\"']",
+        f'op_name="{op_id}"',
+        text,
+    )
+
+
 def _format_torch_op_kwarg(torch_op):
     line = f"        torch_op={torch_op},\n"
     if len(line.rstrip("\n")) <= 120:
@@ -844,6 +868,7 @@ def generate_benchmark_file(blocks, op, bench_source_file):
                         or "INT_DTYPES" in all_block_text)
         needs_torch = "torch." in all_block_text
         needs_flag_gems = "flag_gems" in all_block_text
+        needs_utils = "generate_tensor_input" in all_block_text or "utils." in all_block_text
 
         header = "import pytest\n"
         if needs_torch:
@@ -853,6 +878,8 @@ def generate_benchmark_file(blocks, op, bench_source_file):
         header += "\nfrom . import base"
         if needs_consts:
             header += ", consts"
+        if needs_utils:
+            header += ", utils"
         header += "\n"
 
         parts = [header]
@@ -880,6 +907,8 @@ def generate_benchmark_file(blocks, op, bench_source_file):
         for const in ["FLOAT_DTYPES", "INT_DTYPES", "EXTRA_INT_DTYPES"]:
             content = re.sub(rf"(?<!consts\.)(?<!\w){const}\b", f"consts.{const}", content)
         content = content.replace("consts.consts.", "consts.")
+        content = _prefix_benchmark_utils(content)
+        content = _normalize_benchmark_op_name(content, op_id)
         content = re.sub(r"(?<!base\.)(?<!\w)vendor_name\b", "base.vendor_name", content)
         content = re.sub(r"(?<!base\.)(?<!\w)Config\b", "base.Config", content)
         content = re.sub(r"(?<!consts\.)(?<!\w)BenchLevel\b", "consts.BenchLevel", content)
@@ -1231,6 +1260,9 @@ def insert_ops_init(op, worktree, repo, dry_run):
 
 def insert_full_config(op, worktree, repo, dry_run):
     section("Step 5: _FULL_CONFIG")
+    if not IS_ATEN:
+        ok("非 ATen 算子跳过 _FULL_CONFIG 更新")
+        return
     wt_init = os.path.join(worktree, "src/flag_gems/__init__.py")
     repo_init = os.path.join(repo, "src/flag_gems/__init__.py")
 
@@ -1366,8 +1398,8 @@ def insert_operators_yaml(op, worktree, repo, dry_run):
             entry = {
                 "id": op_id,
                 "description": YAML_DESCRIPTION or f"Triton kernel implementation for {op}.\n",
-                "for": list(YAML_FOR or (op,)),
-                "labels": ["aten", "KernelGen"],
+                "for": list(YAML_FOR or (op_id if not IS_ATEN else op,)),
+                "labels": list(YAML_LABELS or (["aten", "KernelGen"] if IS_ATEN else ["KernelGen", "experimental"])),
                 "kind": ["Math"],
                 "stages": [{"alpha": "5.4"}],
             }
@@ -1375,11 +1407,22 @@ def insert_operators_yaml(op, worktree, repo, dry_run):
                 entry["kind"] = ["NeuralNetwork"]
             warn(f"worktree yaml 无此算子，使用默认条目（description 需人工补充）")
         else:
-            labels = entry.get("labels", [])
+            labels = list(YAML_LABELS or entry.get("labels", []))
+            if not IS_ATEN:
+                labels = [label for label in labels if label != "aten"]
             if "KernelGen" not in labels:
                 labels.append("KernelGen")
+            if not IS_ATEN and "experimental" not in labels:
+                labels.append("experimental")
                 entry["labels"] = labels
+            entry["labels"] = labels
             entry["id"] = op_id
+            if YAML_FOR:
+                entry["for"] = YAML_FOR
+            elif not IS_ATEN:
+                entry["for"] = [op_id]
+            if YAML_DESCRIPTION:
+                entry["description"] = YAML_DESCRIPTION
             stages = entry.get("stages", {})
             if isinstance(stages, dict):
                 entry["stages"] = [{k: v} for k, v in stages.items()]
@@ -1416,6 +1459,9 @@ def insert_operators_yaml(op, worktree, repo, dry_run):
             inplace_id = get_op_id(inplace_op)
             inplace_pattern = rf'\(\s*"[^"]*{re.escape(inplace_op)}[^"]*"\s*,'
             if re.search(inplace_pattern, wt_content):
+                if not IS_ATEN:
+                    warn(f"非 ATen 算子跳过基于 _FULL_CONFIG 的 inplace yaml 自动生成: {inplace_id}")
+                    return
                 # Reload to check current state
                 with open(repo_yaml) as f:
                     current_data = yaml.safe_load(f)
@@ -1499,7 +1545,7 @@ def _insert_yaml_entry(entry, repo_yaml, entry_id, existing_ids, dry_run):
 
 
 def main():
-    global CONFIG_ENTRIES, MODULE_NAME, OP_ID, STRIP_TEST_MARKS, YAML_DESCRIPTION, YAML_FOR
+    global CONFIG_ENTRIES, IS_ATEN, MODULE_NAME, OP_ID, STRIP_TEST_MARKS, YAML_DESCRIPTION, YAML_FOR, YAML_LABELS
 
     parser = argparse.ArgumentParser(description="从 worktree 自动提取算子代码")
     parser.add_argument("operator", help="算子名称")
@@ -1521,7 +1567,9 @@ def main():
         help="extra _FULL_CONFIG entry; may be repeated",
     )
     parser.add_argument("--yaml-for", action="append", default=[], help="yaml `for` value; may be repeated")
+    parser.add_argument("--yaml-label", action="append", default=[], help="yaml label; may be repeated")
     parser.add_argument("--yaml-description", default="", help="fallback yaml description")
+    parser.add_argument("--non-aten", action="store_true", help="prepare a custom or fused non-ATen operator")
     parser.add_argument(
         "--strip-test-mark",
         action="append",
@@ -1541,8 +1589,10 @@ def main():
         aten_name, func_name = entry.split(":", 1)
         CONFIG_ENTRIES.append((aten_name, func_name))
     YAML_FOR = args.yaml_for
+    YAML_LABELS = args.yaml_label
     YAML_DESCRIPTION = args.yaml_description
     STRIP_TEST_MARKS = args.strip_test_mark
+    IS_ATEN = not args.non_aten
 
     op_id = get_op_id(op)
     module_name = get_module_name(op)

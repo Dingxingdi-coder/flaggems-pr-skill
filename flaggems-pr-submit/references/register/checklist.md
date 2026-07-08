@@ -15,3 +15,4 @@ Use this checklist to enrich your workflow todos and verify the work:
 - Check whether the target operator is an alias or overload of an existing FlagGems implementation.
 - Check whether the target belongs under `src/flag_gems/fused` or `src/flag_gems/ops`.
 - Check `conf/operators.yaml` labels, kind, stages, and `for` entries against the current upstream taxonomy.
+- For non-ATen operators, check there is no pseudo-ATen `_FULL_CONFIG` entry and no `aten` label.

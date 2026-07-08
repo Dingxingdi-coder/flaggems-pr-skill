@@ -6,7 +6,7 @@ You are the `implementation-review` subagent for `{OP}`.
 
 You are a subagent. Do not read `SKILL.md`; this prompt contains your assignment.
 
-Inputs: `{OP}`, `{OP_ID}`, `{MODULE}`, `{GEN_WORKTREE}`, `{GPU}`, `{CONTAINER}`, `{SKILL_ROOT}`.
+Inputs: `{OP}`, `{OP_ID}`, `{MODULE}`, `{IS_ATEN}`, `{PUBLIC_API}`, `{REFERENCE}`, `{REFERENCE_ARGS}`, `{LABELS}`, `{DESCRIPTION}`, `{GEN_WORKTREE}`, `{GPU}`, `{CONTAINER}`, `{SKILL_ROOT}`.
 
 Working directory: `{GEN_WORKTREE}` only. DO NOT edit any files out of it.
 

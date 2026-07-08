@@ -4,7 +4,7 @@
 - If target files are provided as a comma-separated value, split them into individual path arguments before staging.
 - Re-check that the staged file list is target-only before committing.
 - Stop and report the staged list if any non-target path is staged.
-- Commit messages must use `[KernelGen][Nvidia] Add <op> operator with Triton kernel` and must not contain co-author trailers.
+- Commit messages and PR titles must use `[KernelGen][Nvidia] Add <op_id> operator with Triton kernel` for every operator, and must not contain co-author trailers.
 - Do not create a PR if static gates fail, performance data is missing, benchmark cases are zero, tests fail, or required PR body sections are incomplete.
 - Treat missing accuracy results, benchmark results, per-case benchmark rows, mean speedup, dtype coverage, tested-on data, or multi-backend status as blocking.
 - Use only the real validation dataset provided by the main agent and facts from the PR worktree; never infer or fabricate validation data.
@@ -14,6 +14,7 @@
 - Push the PR branch to the fork remote before creating the PR.
 - Create a draft PR by default; create a non-draft PR only when the user explicitly requests it.
 - Create PRs with `gh pr create --body-file`; never use interactive body entry, and never stage the body file.
+- For non-ATen operators, do not use PR bodies or labels that claim an `aten::<op>` implementation.
 - If the PR body file is created inside the PR worktree, remove that temporary file after PR creation.
 - The PR body must be English and follow the project PR structure: summary, testing, performance, multi-backend testing, and files changed.
 - The performance section must include the exact benchmark command, a markdown table with one row per successful benchmark case, and an Arithmetic Mean row computed from all successful case speedups.

@@ -16,9 +16,21 @@ import yaml
 
 
 SPECIAL_OPS = {
+    "ReduceL2": ("reduce_l2", "reduce_l2"),
+    "reduce_l2": ("reduce_l2", "reduce_l2"),
     "max_pool2d_with_indices_backward": ("max_pool2d_with_indices", "max_pool2d_with_indices_backward"),
     "matmul_layer_norm": ("Matmul_Layer_Norm", "matmul_layernorm"),
     "__and__": ("_and_", "and_op"),
+}
+
+NON_ATEN_TARGETS = {
+    "reduce_l2": {
+        "public_api": "flag_gems.reduce_l2",
+        "reference": "torch.linalg.vector_norm",
+        "reference_args": "ord=2, dim=None, keepdim=False",
+        "labels": "KernelGen,reduction,experimental",
+        "description": "Computes the global L2 norm of the input tensor.",
+    },
 }
 
 
@@ -103,6 +115,12 @@ class OperatorContext:
     op: str
     op_id: str
     module: str
+    is_aten: bool = True
+    public_api: str = ""
+    reference: str = ""
+    reference_args: str = ""
+    labels: str = ""
+    description: str = ""
 
 
 @dataclass(frozen=True)
@@ -258,6 +276,19 @@ def resolve_operator_context(worktree: Path, raw_op: str, branch_op: str) -> Ope
     op_id = candidates[0].op_id if candidates else fallback_op_id
     imports = module_imports(worktree)
     module = imports.get(op_id) or fallback_module
+    metadata = NON_ATEN_TARGETS.get(normalize_name(op_id)) or NON_ATEN_TARGETS.get(normalize_name(module))
+    if metadata:
+        return OperatorContext(
+            op=branch_op,
+            op_id=op_id,
+            module=module,
+            is_aten=False,
+            public_api=metadata["public_api"],
+            reference=metadata["reference"],
+            reference_args=metadata["reference_args"],
+            labels=metadata["labels"],
+            description=metadata["description"],
+        )
     return OperatorContext(op=branch_op, op_id=op_id, module=module)
 
 
@@ -562,7 +593,7 @@ def github_repo_slug(worktree: Path, remote: str) -> str:
     match = re.search(r"github\.com[:/]([^/]+)/([^/\s]+?)(?:\.git)?$", url)
     if match:
         return f"{match.group(1)}/{match.group(2)}"
-    return "flagos-ai/FlagGems"
+    return "flagos-ai/FlagGems-Experimental"
 
 
 def pr_url_for_commit(worktree: Path, repo: str, commit: str) -> str | None:
@@ -765,6 +796,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--worktree-root", type=Path, required=True)
     parser.add_argument("--upstream", default="upstream")
     parser.add_argument("--base-branch", default="master")
+    parser.add_argument("--check-upstream", action="store_true")
     return parser.parse_args()
 
 
@@ -773,32 +805,42 @@ def main() -> None:
     repo_root = (args.repo_root or args.worktree_root.parent).resolve()
     worktree_root = args.worktree_root.resolve()
     raw_op = strip_aten(args.raw_op)
-    fail_if_upstream_has_raw_op(repo_root, raw_op, args.upstream, args.base_branch)
+    if args.check_upstream:
+        fail_if_upstream_has_raw_op(repo_root, raw_op, args.upstream, args.base_branch)
     worktree, _branch, branch_op = resolve_worktree(repo_root, worktree_root, raw_op)
     context = resolve_operator_context(worktree, raw_op, branch_op)
     branch = check_branch(worktree, context.op, context.op_id)
-    base_ref = fetch_upstream(worktree, args.upstream, args.base_branch)
+    base_ref = f"refs/remotes/{args.upstream}/{args.base_branch}"
+    if args.check_upstream:
+        base_ref = fetch_upstream(worktree, args.upstream, args.base_branch)
 
     wrapper_target = detect_direct_wrapper_target(worktree, context.module, context.op_id)
     if wrapper_target is None:
         wrapper_target = detect_reference_target(worktree, context)
-    if wrapper_target is not None:
+    if args.check_upstream and wrapper_target is not None:
         fail_if_upstream_has_canonical_target(worktree, base_ref, context, wrapper_target, args.upstream)
 
     kernel_path = f"src/flag_gems/ops/{context.module}.py"
-    if upstream_has_yaml_id(worktree, base_ref, context.op_id):
-        fail_upstream(
-            f"upstream already has yaml id {context.op_id}",
-            upstream_yaml_conflict_details(worktree, base_ref, context.op_id, context.module, args.upstream),
-        )
-    if upstream_has_registered_op(worktree, base_ref, context.op_id):
-        fail(f"upstream already registers operator {context.op_id}")
-    if upstream_has_path(worktree, base_ref, kernel_path) and not (context.op.endswith("_") and not is_dunder_operator(context.op)):
-        fail(f"upstream already has {kernel_path}")
+    if args.check_upstream:
+        if upstream_has_yaml_id(worktree, base_ref, context.op_id):
+            fail_upstream(
+                f"upstream already has yaml id {context.op_id}",
+                upstream_yaml_conflict_details(worktree, base_ref, context.op_id, context.module, args.upstream),
+            )
+        if upstream_has_registered_op(worktree, base_ref, context.op_id):
+            fail(f"upstream already registers operator {context.op_id}")
+        if upstream_has_path(worktree, base_ref, kernel_path) and not (context.op.endswith("_") and not is_dunder_operator(context.op)):
+            fail(f"upstream already has {kernel_path}")
 
     print(f"OP={context.op}")
     print(f"OP_ID={context.op_id}")
     print(f"MODULE={context.module}")
+    print(f"IS_ATEN={str(context.is_aten).lower()}")
+    print(f"PUBLIC_API={context.public_api}")
+    print(f"REFERENCE={context.reference}")
+    print(f"REFERENCE_ARGS={context.reference_args}")
+    print(f"LABELS={context.labels}")
+    print(f"DESCRIPTION={context.description}")
     print(f"GEN_WORKTREE={worktree}")
     print(f"GEN_BRANCH={branch}")
     print(f"UPSTREAM_REF={base_ref}")

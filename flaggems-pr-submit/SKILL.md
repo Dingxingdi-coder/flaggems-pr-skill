@@ -61,6 +61,8 @@ If the resolver exits nonzero or cannot complete exactly as invoked above, stop 
 
 If the resolver reports that upstream already contains the operator, also report any `UPSTREAM_PR_URL`, `UPSTREAM_COMMIT`, and `UPSTREAM_EVIDENCE` lines it prints.
 
+The resolver also reports `IS_ATEN`, `PUBLIC_API`, `REFERENCE`, `REFERENCE_ARGS`, `LABELS`, and `DESCRIPTION`. Preserve these values and pass them to all later subagent prompts. For `IS_ATEN=false`, do not describe the operator as `aten::{OP_ID}` and do not add an `aten` label.
+
 After resolving each operator context and before dispatching subagents for `{GEN_WORKTREE}`, create or refresh a worktree-local virtual environment:
 
 ```bash
@@ -85,6 +87,9 @@ docker exec "{CONTAINER}" bash -lc 'python "{skill_root}/scripts/prepare-pr-work
   --op "{OP}" \
   --op-id "{OP_ID}" \
   --module "{MODULE}" \
+  --is-aten "{IS_ATEN}" \
+  --labels "{LABELS}" \
+  --yaml-description "{DESCRIPTION}" \
   --repo-root "{repo_root}" \
   --worktree-root "{worktree_root}" \
   --gen-worktree "{GEN_WORKTREE}" \
