@@ -63,6 +63,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--is-aten", choices=("true", "false"), required=True)
     parser.add_argument("--labels", default="")
     parser.add_argument("--yaml-description", default="")
+    parser.add_argument("--yaml-description-file", type=Path, default=None)
     parser.add_argument("--repo-root", type=Path, required=True)
     parser.add_argument("--worktree-root", type=Path, required=True)
     parser.add_argument("--gen-worktree", type=Path, required=True)
@@ -123,6 +124,14 @@ def main() -> None:
         fail(f"repo root does not exist: {repo_root}")
     if not gen_worktree.is_dir():
         fail(f"generated worktree does not exist: {gen_worktree}")
+    if args.yaml_description and args.yaml_description_file is not None:
+        fail("use only one of --yaml-description or --yaml-description-file")
+    yaml_description = args.yaml_description
+    if args.yaml_description_file is not None:
+        try:
+            yaml_description = args.yaml_description_file.read_text()
+        except OSError as exc:
+            fail(f"could not read yaml description file {args.yaml_description_file}: {exc}")
 
     pr_branch = f"pr/{args.op_id}"
     base_ref = fetch_pr_base(repo_root)
@@ -149,8 +158,8 @@ def main() -> None:
         ]
         for label in [item.strip() for item in args.labels.split(",") if item.strip()]:
             extract_cmd.extend(["--yaml-label", label])
-        if args.yaml_description:
-            extract_cmd.extend(["--yaml-description", args.yaml_description])
+        if yaml_description:
+            extract_cmd.extend(["--yaml-description", yaml_description])
         run(extract_cmd, repo_root)
     except SystemExit:
         if pr_worktree is not None:

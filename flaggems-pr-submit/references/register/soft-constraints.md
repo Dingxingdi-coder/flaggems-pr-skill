@@ -6,6 +6,8 @@
 - `_out`, inplace, and overload variants must either be fully covered or remain unexported.
 - Leading underscores remain part of public operator ids when required, but trailing-underscore inplace variants must use the canonical non-suffixed operator-family files.
 - Generated shared-file layouts must be adapted to the current upstream FlagGems registration layout inside the generated worktree.
+- Validation-file repairs should preserve the generated worktree's tested behavior and benchmark methodology, scoped to `{OP_ID}`; do not invent new coverage or change operator semantics to make validation pass.
+- Treat failures caused by extraction losing surrounding validation context as extraction repairs; treat failures after the target operator actually executes as validation blockers unless the cause is clearly test harness breakage.
 - Target files, pytest marks, benchmark `op_name`, yaml id, ops package exports, and top-level dispatch registration must describe the same public operator id.
 - Keep new entries in `conf/operators.yaml`, `src/flag_gems/__init__.py`, and `src/flag_gems/ops/__init__.py` in the surrounding sorted order.
 - When a target operator is an alias or overload of an existing FlagGems implementation, register and cover the existing implementation instead of adding duplicate wrappers, kernels, tests, or benchmarks.

@@ -66,12 +66,12 @@ For resolver failures, perform this main-agent repair gate:
 3. If the resolver could not classify `{raw_op}` and the inspection identifies a single corresponding operator identity, rerun the resolver with that corresponding operator as `{raw_op}` before repairing metadata or stopping. Preserve the resolver output and report any upstream-conflict evidence it prints.
 4. If the generated worktree has a single supported target identity but missing or inconsistent source metadata, repair that metadata in `{GEN_WORKTREE}`. Valid main-agent repairs are limited to metadata and naming needed by resolver or extraction: YAML operator entries, labels, descriptions, `for` targets, public API/reference metadata for non-ATen targets, import/export/registration names, target source filename, pytest marks or test function names, and benchmark operator names. Do not rewrite kernel algorithms, validation logic, benchmark methodology, registration policy, or PR text in this gate.
 5. For ATen targets, the repaired metadata must identify an exact `torch.ops.aten` schema or overload. Do not retarget to the nearest ATen schema automatically when evidence is ambiguous; report the closest candidate schemas and stop for human repair.
-6. For non-ATen targets, the repaired metadata must provide an explicitly documented fused/custom target, exported public API, PyTorch reference expression, non-`aten` labels, and description. If a concrete downstream use case or reference cannot be established, stop for human repair.
+6. For non-ATen targets, the repaired metadata must identify the submitted public target consistently enough for resolver and extraction to proceed. Preserve resolver output as source metadata; do not require the resolver to synthesize public API, reference, or downstream-use documentation that is not present in the generated worktree.
 7. Rerun the resolver exactly as invoked above after each repair. If it still exits nonzero, stop that operator and report the command, error, what was inspected or repaired, and the required user input or repair direction.
 
 If the resolver reports that upstream already contains the operator, also report any `UPSTREAM_PR_URL`, `UPSTREAM_COMMIT`, and `UPSTREAM_EVIDENCE` lines it prints.
 
-The resolver also reports `IS_ATEN`, `PUBLIC_API`, `REFERENCE`, `REFERENCE_ARGS`, `LABELS`, and `DESCRIPTION`. Preserve these values and pass them to all later subagent prompts. For `IS_ATEN=false`, do not describe the operator as `aten::{OP_ID}` and do not add an `aten` label.
+The resolver also reports `IS_ATEN`, `PUBLIC_API`, `REFERENCE`, `REFERENCE_ARGS`, `LABELS`, and `DESCRIPTION`. Preserve these values and pass them to all later subagent prompts, even when some optional non-ATen fields are empty. For `IS_ATEN=false`, do not describe the operator as `aten::{OP_ID}` and do not add an `aten` label.
 
 After resolving each operator context and before dispatching subagents for `{GEN_WORKTREE}`, create or refresh a worktree-local virtual environment:
 
@@ -93,13 +93,16 @@ You MUST run this step directly. Do not dispatch a subagent for this step.
 Create a clean PR worktree from `{UPSTREAM_REF}`, then extract the target operator files from `{GEN_WORKTREE}` into it:
 
 ```bash
-docker exec "{CONTAINER}" bash -lc 'python "{skill_root}/scripts/prepare-pr-worktree/prepare_pr_worktree.py" \
+docker exec "{CONTAINER}" bash -lc 'DESC_FILE=$(mktemp) && trap "rm -f \"$DESC_FILE\"" EXIT && cat > "$DESC_FILE" <<'"'"'EOF'"'"'
+{DESCRIPTION}
+EOF
+python "{skill_root}/scripts/prepare-pr-worktree/prepare_pr_worktree.py" \
   --op "{OP}" \
   --op-id "{OP_ID}" \
   --module "{MODULE}" \
   --is-aten "{IS_ATEN}" \
   --labels "{LABELS}" \
-  --yaml-description "{DESCRIPTION}" \
+  --yaml-description-file "$DESC_FILE" \
   --repo-root "{repo_root}" \
   --worktree-root "{worktree_root}" \
   --gen-worktree "{GEN_WORKTREE}" \

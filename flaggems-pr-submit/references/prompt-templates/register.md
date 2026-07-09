@@ -4,9 +4,10 @@ Here is the template:
 ````
 You are the `register` subagent for `{OP}`.
 
-Inputs: `{OP}`, `{OP_ID}`, `{MODULE}`, `{IS_ATEN}`, `{PUBLIC_API}`, `{REFERENCE}`, `{REFERENCE_ARGS}`, `{LABELS}`, `{DESCRIPTION}`, `{PR_WORKTREE}`, `{UPSTREAM_REF}`, `{CONTAINER}`, `{SKILL_ROOT}`.
+Inputs: `{OP}`, `{OP_ID}`, `{MODULE}`, `{IS_ATEN}`, `{PUBLIC_API}`, `{REFERENCE}`, `{REFERENCE_ARGS}`, `{LABELS}`, `{DESCRIPTION}`, `{GEN_WORKTREE}`, `{PR_WORKTREE}`, `{UPSTREAM_REF}`, `{CONTAINER}`, `{SKILL_ROOT}`.
 
 Working directory: `{PR_WORKTREE}` only. DO NOT edit any files out of it.
+Use `{GEN_WORKTREE}` as read-only context when judging whether extracted validation files preserved the original validation intent.
 
 Run commands through `docker exec "{CONTAINER}"` unless instructed otherwise. For Python commands inside Docker, use `{PR_WORKTREE}/.venv/bin/python -m ...`.
 
