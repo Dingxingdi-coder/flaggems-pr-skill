@@ -18,6 +18,10 @@ PR_BASE_REPO_SLUG = "flagos-ai/FlagGems-Experimental"
 PR_BASE_REMOTE_URL = f"https://github.com/{PR_BASE_REPO_SLUG}.git"
 PR_BASE_BRANCH = "infra-ci"
 PR_BASE_REF = f"refs/remotes/pr-base/{PR_BASE_BRANCH}"
+LEGACY_REPO_SLUG = "flagos-ai/FlagGems"
+LEGACY_REMOTE_URL = f"https://github.com/{LEGACY_REPO_SLUG}.git"
+LEGACY_BRANCH = "master"
+LEGACY_REF = f"refs/remotes/legacy-upstream/{LEGACY_BRANCH}"
 
 
 def fail(message: str) -> None:
@@ -376,17 +380,25 @@ def fetch_upstream(worktree: Path, upstream: str, base_branch: str) -> str:
     return ref
 
 
-def fetch_pr_base(worktree: Path) -> str:
+def fetch_remote_ref(worktree: Path, repo_slug: str, remote_url: str, branch: str, ref: str) -> str:
     try:
         run_git(
             worktree,
             "fetch",
-            PR_BASE_REMOTE_URL,
-            f"+refs/heads/{PR_BASE_BRANCH}:{PR_BASE_REF}",
+            remote_url,
+            f"+refs/heads/{branch}:{ref}",
         )
     except subprocess.CalledProcessError as exc:
-        fail(f"cannot fetch {PR_BASE_REPO_SLUG}:{PR_BASE_BRANCH}: {exc.stderr.strip()}")
-    return PR_BASE_REF
+        fail(f"cannot fetch {repo_slug}:{branch}: {exc.stderr.strip()}")
+    return ref
+
+
+def fetch_pr_base(worktree: Path) -> str:
+    return fetch_remote_ref(worktree, PR_BASE_REPO_SLUG, PR_BASE_REMOTE_URL, PR_BASE_BRANCH, PR_BASE_REF)
+
+
+def fetch_legacy_base(worktree: Path) -> str:
+    return fetch_remote_ref(worktree, LEGACY_REPO_SLUG, LEGACY_REMOTE_URL, LEGACY_BRANCH, LEGACY_REF)
 
 
 def upstream_has_path(worktree: Path, base_ref: str, path: str) -> bool:
@@ -418,18 +430,27 @@ def github_repo_slug(worktree: Path, remote: str) -> str:
     return "flagos-ai/FlagGems-Experimental"
 
 
+def pr_lookup_repos(repo: str) -> tuple[str, ...]:
+    repos = [repo]
+    if repo != LEGACY_REPO_SLUG:
+        repos.append(LEGACY_REPO_SLUG)
+    return tuple(dict.fromkeys(repos))
+
+
 def pr_url_for_commit(worktree: Path, repo: str, commit: str) -> str | None:
-    pr = run_gh(
-        worktree,
-        "api",
-        f"repos/{repo}/commits/{commit}/pulls",
-        "-H",
-        "Accept: application/vnd.github+json",
-        "--jq",
-        ".[0].html_url",
-    )
-    if pr.returncode == 0 and pr.stdout.strip():
-        return pr.stdout.strip()
+    repos = pr_lookup_repos(repo)
+    for candidate_repo in repos:
+        pr = run_gh(
+            worktree,
+            "api",
+            f"repos/{candidate_repo}/commits/{commit}/pulls",
+            "-H",
+            "Accept: application/vnd.github+json",
+            "--jq",
+            ".[0].html_url",
+        )
+        if pr.returncode == 0 and pr.stdout.strip():
+            return pr.stdout.strip()
 
     message = run_git(worktree, "show", "-s", "--format=%B", commit, check=False)
     match = re.search(r"\(#(\d+)\)", message.stdout)
@@ -437,10 +458,11 @@ def pr_url_for_commit(worktree: Path, repo: str, commit: str) -> str | None:
         return None
     pr_number = match.group(1)
 
-    pr_view = run_gh(worktree, "pr", "view", pr_number, "--repo", repo, "--json", "url", "--jq", ".url")
-    if pr_view.returncode == 0 and pr_view.stdout.strip():
-        return pr_view.stdout.strip()
-    return f"https://github.com/{repo}/pull/{pr_number}"
+    for candidate_repo in repos:
+        pr_view = run_gh(worktree, "pr", "view", pr_number, "--repo", candidate_repo, "--json", "url", "--jq", ".url")
+        if pr_view.returncode == 0 and pr_view.stdout.strip():
+            return pr_view.stdout.strip()
+    return f"https://github.com/{repos[0]}/pull/{pr_number}"
 
 
 def matching_yaml_line(text: str, op_id: str) -> int | None:
@@ -544,25 +566,32 @@ def upstream_has_registered_op(worktree: Path, base_ref: str, op_id: str) -> boo
     return False
 
 
-def fail_if_upstream_has_raw_op(worktree: Path, raw_op: str, base_ref: str) -> None:
+def fail_if_upstream_has_raw_op(worktree: Path, raw_op: str, base_ref: str, repo_slug: str) -> None:
     module, op_id = resolve_module_and_id(raw_op)
     kernel_path = f"src/flag_gems/ops/{module}.py"
 
     if upstream_has_yaml_id(worktree, base_ref, op_id):
         fail_upstream(
             f"upstream already has yaml id {op_id}",
-            upstream_yaml_conflict_details(worktree, base_ref, op_id, module, PR_BASE_REPO_SLUG),
+            upstream_yaml_conflict_details(worktree, base_ref, op_id, module, repo_slug),
         )
     if upstream_has_registered_op(worktree, base_ref, op_id):
         fail_upstream(
             f"upstream already registers operator {op_id}",
-            operator_source_details(worktree, base_ref, op_id, module, PR_BASE_REPO_SLUG),
+            operator_source_details(worktree, base_ref, op_id, module, repo_slug),
         )
     if upstream_has_path(worktree, base_ref, kernel_path) and not (raw_op.endswith("_") and not is_dunder_operator(raw_op)):
         fail_upstream(
             f"upstream already has {kernel_path}",
-            operator_source_details(worktree, base_ref, op_id, module, PR_BASE_REPO_SLUG),
+            operator_source_details(worktree, base_ref, op_id, module, repo_slug),
         )
+
+
+def upstream_check_refs(repo_root: Path, check_legacy: bool) -> tuple[tuple[str, str], ...]:
+    refs = [(PR_BASE_REPO_SLUG, fetch_pr_base(repo_root))]
+    if check_legacy:
+        refs.append((LEGACY_REPO_SLUG, fetch_legacy_base(repo_root)))
+    return tuple(refs)
 
 
 def parse_args() -> argparse.Namespace:
@@ -581,24 +610,35 @@ def main() -> None:
     repo_root = (args.repo_root or args.worktree_root.parent).resolve()
     worktree_root = args.worktree_root.resolve()
     raw_op = strip_aten(args.raw_op)
-    base_ref = fetch_pr_base(repo_root)
+    check_refs = upstream_check_refs(repo_root, args.check_upstream)
+    base_ref = check_refs[0][1]
     if args.check_upstream:
-        fail_if_upstream_has_raw_op(repo_root, raw_op, base_ref)
+        for repo_slug, check_ref in check_refs:
+            fail_if_upstream_has_raw_op(repo_root, raw_op, check_ref, repo_slug)
     worktree, _branch, branch_op = resolve_worktree(repo_root, worktree_root, raw_op)
     context = resolve_operator_context(worktree, raw_op, branch_op)
     branch = check_branch(worktree, context.op, context.op_id)
 
     kernel_path = f"src/flag_gems/ops/{context.module}.py"
     if args.check_upstream:
-        if upstream_has_yaml_id(worktree, base_ref, context.op_id):
-            fail_upstream(
-                f"upstream already has yaml id {context.op_id}",
-                upstream_yaml_conflict_details(worktree, base_ref, context.op_id, context.module, PR_BASE_REPO_SLUG),
-            )
-        if upstream_has_registered_op(worktree, base_ref, context.op_id):
-            fail(f"upstream already registers operator {context.op_id}")
-        if upstream_has_path(worktree, base_ref, kernel_path) and not (context.op.endswith("_") and not is_dunder_operator(context.op)):
-            fail(f"upstream already has {kernel_path}")
+        for repo_slug, check_ref in check_refs:
+            if upstream_has_yaml_id(worktree, check_ref, context.op_id):
+                fail_upstream(
+                    f"upstream already has yaml id {context.op_id}",
+                    upstream_yaml_conflict_details(worktree, check_ref, context.op_id, context.module, repo_slug),
+                )
+            if upstream_has_registered_op(worktree, check_ref, context.op_id):
+                fail_upstream(
+                    f"upstream already registers operator {context.op_id}",
+                    operator_source_details(worktree, check_ref, context.op_id, context.module, repo_slug),
+                )
+            if upstream_has_path(worktree, check_ref, kernel_path) and not (
+                context.op.endswith("_") and not is_dunder_operator(context.op)
+            ):
+                fail_upstream(
+                    f"upstream already has {kernel_path}",
+                    operator_source_details(worktree, check_ref, context.op_id, context.module, repo_slug),
+                )
 
     print(f"OP={context.op}")
     print(f"OP_ID={context.op_id}")
