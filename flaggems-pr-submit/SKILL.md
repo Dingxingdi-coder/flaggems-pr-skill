@@ -54,7 +54,7 @@ If there is any context mentioned above you don't get, stop and ask the user for
 For each raw operator, run the resolver before dispatching any subagent:
 
 ```bash
-docker exec "{CONTAINER}" bash -lc 'python "{skill_root}/scripts/name-worktree/resolve_op_context.py" --raw-op "{raw_op}" --worktree-root "{worktree_root}"'
+docker exec "{CONTAINER}" bash -lc 'python "{skill_root}/scripts/name-worktree/resolve_op_context.py" --raw-op "{raw_op}" --worktree-root "{worktree_root}" --check-upstream'
 ```
 
 If the resolver exits nonzero or cannot complete exactly as invoked above, the main agent must first determine whether this is a generated-worktree source-metadata problem before stopping. Do not dispatch a subagent while the resolver is failing.
