@@ -9,6 +9,8 @@ Use this checklist to enrich your workflow todos and verify the work:
 - Check whether leading underscores or trailing-underscore inplace variants require canonical operator-family files.
 - Check generated shared-file layouts against the current upstream FlagGems registration layout.
 - Before final validation, verify extracted target tests and benchmarks still preserve the validation intent of the generated worktree; repair extraction-induced validation breakage in `{PR_WORKTREE}` when needed.
+- Run standalone collection checks for extracted target test and benchmark files before final validation.
+- If a standalone collection check fails, diagnose whether it belongs to PR-worktree registration or validation-file integration; repair and rerun when it does, otherwise block with the exact failure and next step.
 - Check target files, pytest marks, benchmark `op_name`, yaml id, ops package exports, and top-level dispatch registration describe the same public operator id.
 - Check public operator ids and generated file names use the current FlagGems naming style and avoid CamelCase unless required by upstream taxonomy.
 - Check that `conf/operators.yaml` contains explicit `description`, `for`, `labels`, `kind`, and `stages` fields for every target yaml entry before extraction or final validation.

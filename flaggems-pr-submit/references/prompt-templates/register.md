@@ -26,13 +26,20 @@ Workflow:
 3. Merge checklist items into the existing workflow todos where they belong; add new todos only for checklist items not covered by an existing workflow step.
 4. Work through the workflow todos in order, checking each one off as it is finished.
 5. Make registration edits.
-6. After the main work is complete, create and complete one final todo to verify that you followed the general and register soft constraints.
-
-After registration edits, run:
+6. Run the static gate:
 
 ```bash
 docker exec "{CONTAINER}" bash -lc 'cd "{PR_WORKTREE}" && "{PR_WORKTREE}/.venv/bin/python" "{SKILL_ROOT}/scripts/general/operator_static_gate.py" --op "{OP}" --op-id "{OP_ID}" --module "{MODULE}" --base-ref "{UPSTREAM_REF}"'
 ```
 
-Return changed files, registration surfaces touched, static gate command and result, unresolved inconsistencies, and blocking issues.
+7. Run lightweight standalone validation-file collection checks. If a collection check fails, handle it according to the register soft constraints:
+
+```bash
+docker exec "{CONTAINER}" bash -lc 'cd "{PR_WORKTREE}" && "{PR_WORKTREE}/.venv/bin/python" -m pytest --collect-only -q tests/test_{OP}.py'
+docker exec "{CONTAINER}" bash -lc 'cd "{PR_WORKTREE}" && "{PR_WORKTREE}/.venv/bin/python" -m pytest --collect-only -q benchmark/test_{OP}.py --level core'
+```
+
+8. After the main work is complete, create and complete one final todo to verify that you followed the general and register soft constraints.
+
+Return changed files, registration surfaces touched, static gate command and result, standalone collection check commands and results, unresolved inconsistencies, and blocking issues.
 ````
