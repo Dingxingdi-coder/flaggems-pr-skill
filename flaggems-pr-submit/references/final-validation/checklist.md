@@ -3,6 +3,7 @@
 Use this checklist to enrich your workflow todos and verify the work:
 
 - Run the static gate before staging.
+- Confirm the PR branch diff against `{UPSTREAM_REF}` contains only the target operator files.
 - Confirm static gates pass, tests pass, benchmark cases are nonzero, and performance data is present.
 - Confirm accuracy results, benchmark results, per-case benchmark rows, mean speedup, dtype coverage, tested-on data, and multi-backend status are present.
 - Confirm exported functions have matching test and benchmark coverage.

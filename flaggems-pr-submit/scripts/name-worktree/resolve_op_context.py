@@ -14,6 +14,11 @@ from pathlib import Path
 
 import yaml
 
+PR_BASE_REPO_SLUG = "flagos-ai/FlagGems-Experimental"
+PR_BASE_REMOTE_URL = f"https://github.com/{PR_BASE_REPO_SLUG}.git"
+PR_BASE_BRANCH = "infra-ci"
+PR_BASE_REF = f"refs/remotes/pr-base/{PR_BASE_BRANCH}"
+
 
 def fail(message: str) -> None:
     print(f"ERROR: {message}", file=sys.stderr)
@@ -374,6 +379,19 @@ def fetch_upstream(worktree: Path, upstream: str, base_branch: str) -> str:
     return ref
 
 
+def fetch_pr_base(worktree: Path) -> str:
+    try:
+        run_git(
+            worktree,
+            "fetch",
+            PR_BASE_REMOTE_URL,
+            f"+refs/heads/{PR_BASE_BRANCH}:{PR_BASE_REF}",
+        )
+    except subprocess.CalledProcessError as exc:
+        fail(f"cannot fetch {PR_BASE_REPO_SLUG}:{PR_BASE_BRANCH}: {exc.stderr.strip()}")
+    return PR_BASE_REF
+
+
 def upstream_has_path(worktree: Path, base_ref: str, path: str) -> bool:
     result = run_git(worktree, "cat-file", "-e", f"{base_ref}:{path}", check=False)
     return result.returncode == 0
@@ -393,6 +411,8 @@ def upstream_has_yaml_id(worktree: Path, base_ref: str, op_id: str) -> bool:
 
 
 def github_repo_slug(worktree: Path, remote: str) -> str:
+    if "/" in remote and not remote.startswith(("http://", "https://", "git@")):
+        return remote
     result = run_git(worktree, "remote", "get-url", remote, check=False)
     url = result.stdout.strip()
     match = re.search(r"github\.com[:/]([^/]+)/([^/\s]+?)(?:\.git)?$", url)
@@ -527,25 +547,24 @@ def upstream_has_registered_op(worktree: Path, base_ref: str, op_id: str) -> boo
     return False
 
 
-def fail_if_upstream_has_raw_op(worktree: Path, raw_op: str, upstream: str, base_branch: str) -> None:
+def fail_if_upstream_has_raw_op(worktree: Path, raw_op: str, base_ref: str) -> None:
     module, op_id = resolve_module_and_id(raw_op)
-    base_ref = fetch_upstream(worktree, upstream, base_branch)
     kernel_path = f"src/flag_gems/ops/{module}.py"
 
     if upstream_has_yaml_id(worktree, base_ref, op_id):
         fail_upstream(
             f"upstream already has yaml id {op_id}",
-            upstream_yaml_conflict_details(worktree, base_ref, op_id, module, upstream),
+            upstream_yaml_conflict_details(worktree, base_ref, op_id, module, PR_BASE_REPO_SLUG),
         )
     if upstream_has_registered_op(worktree, base_ref, op_id):
         fail_upstream(
             f"upstream already registers operator {op_id}",
-            operator_source_details(worktree, base_ref, op_id, module, upstream),
+            operator_source_details(worktree, base_ref, op_id, module, PR_BASE_REPO_SLUG),
         )
     if upstream_has_path(worktree, base_ref, kernel_path) and not (raw_op.endswith("_") and not is_dunder_operator(raw_op)):
         fail_upstream(
             f"upstream already has {kernel_path}",
-            operator_source_details(worktree, base_ref, op_id, module, upstream),
+            operator_source_details(worktree, base_ref, op_id, module, PR_BASE_REPO_SLUG),
         )
 
 
@@ -565,21 +584,19 @@ def main() -> None:
     repo_root = (args.repo_root or args.worktree_root.parent).resolve()
     worktree_root = args.worktree_root.resolve()
     raw_op = strip_aten(args.raw_op)
+    base_ref = fetch_pr_base(repo_root)
     if args.check_upstream:
-        fail_if_upstream_has_raw_op(repo_root, raw_op, args.upstream, args.base_branch)
+        fail_if_upstream_has_raw_op(repo_root, raw_op, base_ref)
     worktree, _branch, branch_op = resolve_worktree(repo_root, worktree_root, raw_op)
     context = resolve_operator_context(worktree, raw_op, branch_op)
     branch = check_branch(worktree, context.op, context.op_id)
-    base_ref = f"refs/remotes/{args.upstream}/{args.base_branch}"
-    if args.check_upstream:
-        base_ref = fetch_upstream(worktree, args.upstream, args.base_branch)
 
     kernel_path = f"src/flag_gems/ops/{context.module}.py"
     if args.check_upstream:
         if upstream_has_yaml_id(worktree, base_ref, context.op_id):
             fail_upstream(
                 f"upstream already has yaml id {context.op_id}",
-                upstream_yaml_conflict_details(worktree, base_ref, context.op_id, context.module, args.upstream),
+                upstream_yaml_conflict_details(worktree, base_ref, context.op_id, context.module, PR_BASE_REPO_SLUG),
             )
         if upstream_has_registered_op(worktree, base_ref, context.op_id):
             fail(f"upstream already registers operator {context.op_id}")

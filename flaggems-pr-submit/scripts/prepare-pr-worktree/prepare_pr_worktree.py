@@ -8,6 +8,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+PR_BASE_REPO_SLUG = "flagos-ai/FlagGems-Experimental"
+PR_BASE_REMOTE_URL = f"https://github.com/{PR_BASE_REPO_SLUG}.git"
+PR_BASE_BRANCH = "infra-ci"
+PR_BASE_REF = f"refs/remotes/pr-base/{PR_BASE_BRANCH}"
+
 
 TARGET_FILES = (
     "src/flag_gems/ops/{module}.py",
@@ -37,6 +42,19 @@ def git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return run(["git", *args], cwd)
 
 
+def fetch_pr_base(repo_root: Path) -> str:
+    run(
+        [
+            "git",
+            "fetch",
+            PR_BASE_REMOTE_URL,
+            f"+refs/heads/{PR_BASE_BRANCH}:{PR_BASE_REF}",
+        ],
+        repo_root,
+    )
+    return PR_BASE_REF
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--op", required=True)
@@ -48,7 +66,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--repo-root", type=Path, required=True)
     parser.add_argument("--worktree-root", type=Path, required=True)
     parser.add_argument("--gen-worktree", type=Path, required=True)
-    parser.add_argument("--upstream-ref", required=True)
+    parser.add_argument("--upstream-ref", default="")
     return parser.parse_args()
 
 
@@ -87,6 +105,15 @@ def ensure_pr_worktree(repo_root: Path, worktree_root: Path, branch: str, upstre
     return target_path
 
 
+def cleanup_created_pr_worktree(repo_root: Path, pr_worktree: Path, branch: str) -> None:
+    print(
+        f"Cleaning up failed PR worktree created in this run: {pr_worktree} ({branch})",
+        file=sys.stderr,
+    )
+    subprocess.run(["git", "worktree", "remove", "--force", str(pr_worktree)], cwd=repo_root, check=False)
+    subprocess.run(["git", "branch", "-D", branch], cwd=repo_root, check=False)
+
+
 def main() -> None:
     args = parse_args()
     repo_root = args.repo_root.resolve()
@@ -98,30 +125,37 @@ def main() -> None:
         fail(f"generated worktree does not exist: {gen_worktree}")
 
     pr_branch = f"pr/{args.op_id}"
-    pr_worktree = ensure_pr_worktree(repo_root, worktree_root, pr_branch, args.upstream_ref)
+    base_ref = fetch_pr_base(repo_root)
+    pr_worktree: Path | None = None
+    try:
+        pr_worktree = ensure_pr_worktree(repo_root, worktree_root, pr_branch, base_ref)
 
-    script_dir = Path(__file__).resolve().parent
-    extract_script = script_dir / "extract_from_worktree.py"
-    extract_cmd = [
-        sys.executable,
-        str(extract_script),
-        args.op,
-        "--op-id",
-        args.op_id,
-        "--module",
-        args.module,
-        "--source-worktree",
-        str(gen_worktree),
-        "--repo-dir",
-        str(pr_worktree),
-        "--is-aten",
-        args.is_aten,
-    ]
-    for label in [item.strip() for item in args.labels.split(",") if item.strip()]:
-        extract_cmd.extend(["--yaml-label", label])
-    if args.yaml_description:
-        extract_cmd.extend(["--yaml-description", args.yaml_description])
-    run(extract_cmd, repo_root)
+        script_dir = Path(__file__).resolve().parent
+        extract_script = script_dir / "extract_from_worktree.py"
+        extract_cmd = [
+            sys.executable,
+            str(extract_script),
+            args.op,
+            "--op-id",
+            args.op_id,
+            "--module",
+            args.module,
+            "--source-worktree",
+            str(gen_worktree),
+            "--repo-dir",
+            str(pr_worktree),
+            "--is-aten",
+            args.is_aten,
+        ]
+        for label in [item.strip() for item in args.labels.split(",") if item.strip()]:
+            extract_cmd.extend(["--yaml-label", label])
+        if args.yaml_description:
+            extract_cmd.extend(["--yaml-description", args.yaml_description])
+        run(extract_cmd, repo_root)
+    except SystemExit:
+        if pr_worktree is not None:
+            cleanup_created_pr_worktree(repo_root, pr_worktree, pr_branch)
+        raise
 
     target_files = [template.format(module=args.module, op_id=args.op_id) for template in TARGET_FILES]
     print(f"PR_BRANCH={pr_branch}")

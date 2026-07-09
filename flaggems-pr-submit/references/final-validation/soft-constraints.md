@@ -2,6 +2,7 @@
 
 - Stage target files explicitly by path and never stage the whole repository.
 - If target files are provided as a comma-separated value, split them into individual path arguments before staging.
+- Before committing or creating the PR, compare `git log --oneline {UPSTREAM_REF}..HEAD` and `git diff --name-only {UPSTREAM_REF}...HEAD` against the intended target scope. Stop if unrelated upstream commits or non-target files would appear in the PR.
 - Re-check that the staged file list is target-only before committing.
 - Stop and report the staged list if any non-target path is staged.
 - Commit messages and PR titles must use `[KernelGen][Nvidia] Add <op_id> operator with Triton kernel` for every operator, and must not contain co-author trailers.
