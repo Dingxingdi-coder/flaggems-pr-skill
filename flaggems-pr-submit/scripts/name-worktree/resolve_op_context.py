@@ -340,24 +340,21 @@ def resolve_operator_context(worktree: Path, raw_op: str, branch_op: str) -> Ope
             description=description,
         )
 
+    # No exact ATen schema means this is a non-ATen target. The resolver only
+    # performs mechanical worktree identity resolution; semantic metadata such
+    # as public API, reference expression, labels, and description is completed
+    # by implementation-review/register stages.
     public_api = exported_public_api(worktree, op_id)
-    if labels and "aten" not in {label.casefold() for label in labels} and description and public_api and reference:
-        return OperatorContext(
-            op=branch_op,
-            op_id=op_id,
-            module=module,
-            is_aten=False,
-            public_api=public_api,
-            reference=reference,
-            reference_args=reference_args,
-            labels=",".join(labels),
-            description=description,
-        )
-
-    evidence = ", ".join(str(name) for name in schema_names if str(name).strip())
-    fail(
-        f"cannot classify {raw_op} as ATen or non-ATen; no exact torch.ops.aten schema found "
-        f"for [{evidence}], and generic non-ATen metadata is incomplete"
+    return OperatorContext(
+        op=branch_op,
+        op_id=op_id,
+        module=module,
+        is_aten=False,
+        public_api=public_api,
+        reference=reference,
+        reference_args=reference_args,
+        labels=",".join(labels),
+        description=description,
     )
 
 
